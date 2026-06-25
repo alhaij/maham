@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>مهام — إدارة مهام المكتب</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.0/dist/umd/supabase.min.js"></script>
+<style>
+  /* ============================================================
+     CONFIG — عدّل هذين السطرين فقط بقيم مشروعك من Supabase
+     (تجدهما في: Supabase > Project Settings > API)
+     ============================================================ */
+  :root{
+    --bg:#f5f3ef; --panel:#fff; --ink:#2a2a2a; --muted:#8b8680;
+    --line:#e6e1d8; --gold:#c89b3c; --green:#5a8a6b; --red:#b5564a; --dark:#2a2a2a;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'IBM Plex Sans Arabic',sans-serif;background:var(--bg);color:var(--ink)}
+  .hidden{display:none!important}
+  /* تسجيل الدخول */
+  .auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+  .auth-card{background:var(--panel);border-radius:16px;padding:36px 30px;width:100%;max-width:380px;box-shadow:0 10px 40px rgba(0,0,0,.08)}
+  .brand{font-size:26px;font-weight:700;text-align:center;margin:0 0 4px}
+  .brand-sub{text-align:center;color:var(--muted);font-size:13px;margin:0 0 26px}
+  .field{margin-bottom:14px}
+  .field label{display:block;font-size:13px;font-weight:500;margin-bottom:6px;color:#555}
+  .field input{width:100%;padding:11px 13px;border:1px solid var(--line);border-radius:9px;font-family:inherit;font-size:14px;background:#fafafa}
+  .field input:focus{outline:none;border-color:var(--gold)}
+  .btn{width:100%;padding:12px;border:none;border-radius:9px;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;background:var(--dark);color:#fff;transition:transform .1s}
+  .btn:active{transform:scale(.98)}
+  .btn:disabled{opacity:.5;cursor:default}
+  .toggle{text-align:center;margin-top:16px;font-size:13px;color:var(--muted)}
+  .toggle a{color:var(--gold);cursor:pointer;font-weight:600;text-decoration:none}
+  .msg{font-size:13px;padding:9px 12px;border-radius:8px;margin-bottom:14px;text-align:center}
+  .msg.err{background:#fae9e7;color:var(--red)}
+  .msg.ok{background:#eaf2ec;color:var(--green)}
+  /* التطبيق */
+  .topbar{background:var(--panel);border-bottom:1px solid var(--line);padding:14px 20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
+  .topbar h1{margin:0;font-size:20px;font-weight:700}
+  .who{font-size:12.5px;color:var(--muted)}
+  .role-pill{display:inline-block;font-size:11px;font-weight:600;padding:2px 9px;border-radius:8px;margin-inline-start:6px}
+  .role-boss{background:#f3ecd9;color:#8a6d1e}
+  .role-emp{background:#eaf2ec;color:var(--green)}
+  .logout{background:transparent;border:1px solid var(--line);color:#666;padding:7px 14px;border-radius:8px;font-family:inherit;font-size:13px;cursor:pointer}
+  .tabs{display:flex;gap:6px;background:#e8e4dd;padding:4px;border-radius:10px}
+  .tabs button{border:none;background:transparent;padding:8px 16px;border-radius:7px;font-family:inherit;font-size:14px;font-weight:500;cursor:pointer;color:#6a6560}
+  .tabs button.active{background:#fff;color:var(--ink);box-shadow:0 1px 4px rgba(0,0,0,.06)}
+  .wrap{max-width:1100px;margin:0 auto;padding:18px 16px}
+  .alert{background:#fcf4e3;border:1px solid #ecd9a8;border-radius:10px;padding:12px 16px;display:flex;gap:10px;align-items:center;font-size:14px;color:#7a5d1e;margin-bottom:16px}
+  .addbtn{background:var(--dark);color:#fff;border:none;padding:10px 20px;border-radius:8px;font-family:inherit;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:12px}
+  .form{background:var(--panel);padding:16px;border-radius:12px;display:flex;gap:10px;flex-wrap:wrap;box-shadow:0 2px 8px rgba(0,0,0,.04);margin-bottom:16px}
+  .form input,.form select{padding:9px 12px;border-radius:8px;border:1px solid var(--line);font-family:inherit;font-size:14px;flex:1 1 150px;background:#fafafa}
+  .board{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+  .col{background:#ece8e1;border-radius:12px;padding:12px;min-height:200px}
+  .col-head{display:flex;align-items:center;gap:8px;margin-bottom:12px;padding:0 4px}
+  .dot{width:10px;height:10px;border-radius:50%}
+  .col-title{font-weight:600;font-size:14.5px}
+  .count{margin-inline-start:auto;background:#fff;border-radius:12px;padding:1px 9px;font-size:12px;color:#888;font-weight:600}
+  .card{background:#fff;border-radius:9px;padding:12px;margin-bottom:10px;cursor:grab;border-right:3px solid;box-shadow:0 1px 3px rgba(0,0,0,.05);transition:transform .15s,box-shadow .15s}
+  .card:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(0,0,0,.08)}
+  .card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:6px}
+  .card-title{font-size:14px;font-weight:500;line-height:1.4}
+  .card-del{border:none;background:transparent;color:#ccc;font-size:20px;cursor:pointer;line-height:1;padding:0}
+  .tag{display:inline-block;margin-top:6px;font-size:11px;color:#9a8f7d;background:#f3efe7;padding:2px 8px;border-radius:6px}
+  .meta{display:flex;justify-content:space-between;align-items:center;margin-top:10px;gap:8px}
+  .who-tag{font-size:12px;color:#555;background:#eef2ee;padding:3px 10px;border-radius:12px;font-weight:500}
+  .due{font-size:12px;color:#888;font-weight:500}
+  .due.urgent{color:var(--red);font-weight:700}
+  .move-row{display:flex;gap:6px;margin-top:10px}
+  .move-row span{flex:1}
+  .move-btn{flex:1;background:#eef2ee;color:#5a6a5d;border:none;padding:8px 4px;border-radius:7px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;transition:background .15s}
+  .move-btn:active{background:#dce6dd}
+  .move-fwd{background:#eaf0f4;color:#4f6477}
+  .move-fwd:active{background:#d8e4ee}
+  .send{width:100%;margin-top:8px;background:#f3efe7;color:#7a8a7d;border:none;padding:7px;border-radius:7px;font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer}
+  .send:hover{background:#e9f0ea;color:#3f7355}
+  .panel{background:var(--panel);border-radius:12px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,.04);margin-bottom:16px}
+  .panel-head{font-size:15px;font-weight:600;margin-bottom:14px}
+  .stat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin-bottom:16px}
+  .stat{background:var(--panel);border-radius:12px;padding:18px 14px;text-align:center;border-top:3px solid;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+  .stat .v{font-size:30px;font-weight:700;line-height:1}
+  .stat .l{font-size:12.5px;color:var(--muted);margin-top:6px}
+  .bar-track{background:#eee9e1;border-radius:8px;height:10px;overflow:hidden}
+  .bar-fill{height:100%;border-radius:8px;transition:width .4s}
+  .prog{margin-bottom:14px}
+  .prog-label{display:flex;justify-content:space-between;font-size:13px;margin-bottom:6px;color:#444}
+  .loading{padding:60px;text-align:center;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<!-- ====================== شاشة تسجيل الدخول ====================== -->
+<div id="authView" class="auth-wrap">
+  <div class="auth-card">
+    <h1 class="brand">مهام</h1>
+    <p class="brand-sub">نظام إدارة مهام المكتب</p>
+    <div id="authMsg" class="msg hidden"></div>
+    <div id="nameField" class="field hidden">
+      <label>الاسم الكامل</label>
+      <input id="fullName" type="text" placeholder="مثال: عبدالله خليفة" />
+    </div>
+    <div class="field">
+      <label>البريد الإلكتروني</label>
+      <input id="email" type="email" placeholder="you@example.com" />
+    </div>
+    <div class="field">
+      <label>كلمة المرور</label>
+      <input id="password" type="password" placeholder="••••••••" />
+    </div>
+    <button id="authBtn" class="btn">دخول</button>
+    <div class="toggle" id="toggleAuth">
+      ليس لديك حساب؟ <a id="toggleLink">أنشئ حساباً</a>
+    </div>
+  </div>
+</div>
+
+<!-- ====================== التطبيق ====================== -->
+<div id="appView" class="hidden">
+  <div class="topbar">
+    <div>
+      <h1>مهام</h1>
+      <span class="who" id="whoami"></span>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <div class="tabs">
+        <button data-tab="board" class="active">اللوحة</button>
+        <button data-tab="dash">الداشبورد</button>
+      </div>
+      <button class="logout" id="logoutBtn">خروج</button>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div id="alertBox" class="alert hidden"></div>
+
+    <!-- اللوحة -->
+    <div id="boardTab">
+      <button id="newTaskBtn" class="addbtn hidden">+ مهمة جديدة</button>
+      <div id="taskForm" class="form hidden">
+        <input id="fTitle" placeholder="عنوان المهمة" />
+        <input id="fProject" placeholder="المشروع" />
+        <select id="fAssignee"><option value="">الموظف…</option></select>
+        <input id="fDue" type="date" />
+        <button id="saveTask" class="addbtn" style="margin:0">إضافة</button>
+      </div>
+      <div class="board" id="board"></div>
+    </div>
+
+    <!-- الداشبورد -->
+    <div id="dashTab" class="hidden"></div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+//  ضع هنا قيم مشروعك من Supabase (Project Settings > API)
+// ============================================================
+const SUPABASE_URL = "https://wrzbmwyzcenynskamhwr.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_CPgNPV9Uuq3gOzF2CGPoVg_8qhoBNcX";
+const BOSS_EMAIL = "alhaij@gmail.com";              // بريد الرئيس (يُمنح صلاحية الإدارة)
+
+// ------------------------------------------------------------
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const COLUMNS = [
+  {id:"todo",  label:"قيد الانتظار",  accent:"#8b8680"},
+  {id:"doing", label:"جاري التنفيذ",  accent:"#c89b3c"},
+  {id:"review",label:"للمراجعة",      accent:"#7a86b8"},
+  {id:"done",  label:"مكتمل",         accent:"#5a8a6b"},
+];
+let me = null, myProfile = null, tasks = [], people = [], signupMode = false, dragId = null;
+
+const $ = (s)=>document.querySelector(s);
+const todayISO = ()=>new Date().toISOString().slice(0,10);
+function daysLeft(d){ if(!d) return 99; const due=new Date(d); const n=new Date(); n.setHours(0,0,0,0); return Math.round((due-n)/86400000); }
+function fmtDate(d){ return d ? new Date(d).toLocaleDateString("ar-SA",{day:"numeric",month:"long"}) : "—"; }
+
+// ===== تسجيل الدخول =====
+function showMsg(t,kind){ const m=$("#authMsg"); m.textContent=t; m.className="msg "+kind; }
+$("#toggleLink").onclick=()=>{
+  signupMode=!signupMode;
+  $("#nameField").classList.toggle("hidden",!signupMode);
+  $("#authBtn").textContent=signupMode?"إنشاء حساب":"دخول";
+  $("#toggleAuth").innerHTML=signupMode
+    ? 'لديك حساب؟ <a id="toggleLink">سجّل دخولك</a>'
+    : 'ليس لديك حساب؟ <a id="toggleLink">أنشئ حساباً</a>';
+  $("#toggleLink").onclick=arguments.callee;
+  $("#authMsg").classList.add("hidden");
+  location.reload(); // إعادة ربط بسيطة
+};
+
+$("#authBtn").onclick=async()=>{
+  const email=$("#email").value.trim(), pw=$("#password").value;
+  if(!email||!pw){ showMsg("أدخل البريد وكلمة المرور","err"); return; }
+  $("#authBtn").disabled=true;
+  try{
+    if(signupMode){
+      const name=$("#fullName").value.trim();
+      const {error}=await sb.auth.signUp({email,password:pw,options:{data:{full_name:name}}});
+      if(error) throw error;
+      showMsg("تم إنشاء الحساب. تحقق من بريدك لتأكيد الحساب ثم سجّل دخولك.","ok");
+    }else{
+      const {error}=await sb.auth.signInWithPassword({email,password:pw});
+      if(error) throw error;
+    }
+  }catch(e){ showMsg(translateErr(e.message),"err"); }
+  $("#authBtn").disabled=false;
+};
+function translateErr(m){
+  if(/Invalid login/i.test(m)) return "بريد أو كلمة مرور غير صحيحة";
+  if(/already registered/i.test(m)) return "هذا البريد مسجّل مسبقاً";
+  if(/at least 6/i.test(m)) return "كلمة المرور ٦ أحرف على الأقل";
+  if(/confirm/i.test(m)) return "أكّد بريدك أولاً عبر الرسالة المرسلة";
+  return m;
+}
+
+$("#logoutBtn").onclick=async()=>{ await sb.auth.signOut(); location.reload(); };
+
+// ===== جلسة الدخول =====
+sb.auth.onAuthStateChange((_e,session)=>{ if(session) enterApp(session.user); });
+(async()=>{ const {data}=await sb.auth.getSession(); if(data.session) enterApp(data.session.user); })();
+
+async function enterApp(user){
+  me=user;
+  $("#authView").classList.add("hidden");
+  $("#appView").classList.remove("hidden");
+  // جلب ملفي الشخصي
+  let {data:prof}=await sb.from("profiles").select("*").eq("id",user.id).single();
+  myProfile=prof||{full_name:user.email,role:(user.email===BOSS_EMAIL?"boss":"employee")};
+  const isBoss=myProfile.role==="boss";
+  $("#whoami").innerHTML=(myProfile.full_name||user.email)+
+    `<span class="role-pill ${isBoss?'role-boss':'role-emp'}">${isBoss?'الرئيس':'موظف'}</span>`;
+  if(isBoss) $("#newTaskBtn").classList.remove("hidden");
+  await loadPeople(); await loadTasks(); subscribe();
+}
+
+async function loadPeople(){
+  const {data}=await sb.from("profiles").select("*").order("created_at");
+  people=data||[];
+  const sel=$("#fAssignee");
+  sel.innerHTML='<option value="">الموظف…</option>'+
+    people.map(p=>`<option value="${p.id}">${p.full_name||p.email}</option>`).join("");
+}
+async function loadTasks(){
+  const {data}=await sb.from("tasks").select("*").order("created_at",{ascending:false});
+  tasks=data||[]; render();
+}
+function subscribe(){
+  sb.channel("tasks-rt").on("postgres_changes",
+    {event:"*",schema:"public",table:"tasks"},()=>loadTasks()).subscribe();
+}
+
+// ===== نموذج المهمة =====
+$("#newTaskBtn").onclick=()=>$("#taskForm").classList.toggle("hidden");
+$("#fDue").value=new Date(Date.now()+3*864e5).toISOString().slice(0,10);
+$("#saveTask").onclick=async()=>{
+  const title=$("#fTitle").value.trim(); if(!title) return;
+  const aid=$("#fAssignee").value;
+  const aname=people.find(p=>p.id===aid)?.full_name||"";
+  const {error}=await sb.from("tasks").insert({
+    title, project:$("#fProject").value.trim(), status:"todo",
+    due_date:$("#fDue").value||null, assignee_id:aid||null, assignee_name:aname,
+    created_by:me.id
+  });
+  if(error){ alert("تعذّر الحفظ: "+error.message); return; }
+  $("#fTitle").value="";$("#fProject").value="";$("#fAssignee").value="";
+  $("#taskForm").classList.add("hidden");
+};
+
+async function moveTask(id,status){ await sb.from("tasks").update({status}).eq("id",id); }
+async function delTask(id){ if(confirm("حذف المهمة؟")) await sb.from("tasks").delete().eq("id",id); }
+
+function emailTask(t){
+  const p=people.find(x=>x.id===t.assignee_id);
+  if(!p||!p.email){ alert("لا يوجد بريد لهذا الموظف."); return; }
+  const dl=daysLeft(t.due_date), col=COLUMNS.find(c=>c.id===t.status)?.label||"";
+  const body=`مرحباً ${p.full_name||""}،\n\nتفاصيل المهمة:\n\n• المهمة: ${t.title}\n`+
+    (t.project?`• المشروع: ${t.project}\n`:"")+
+    `• التسليم: ${fmtDate(t.due_date)} (${dl<0?`متأخرة ${-dl} يوم`:dl===0?"اليوم":`باقي ${dl} يوم`})\n`+
+    `• الحالة: ${col}\n\nيرجى المتابعة والتحديث على النظام.\n\nمع التحية،\n${myProfile.full_name||""}`;
+  const cc=BOSS_EMAIL?`&cc=${encodeURIComponent(BOSS_EMAIL)}`:"";
+  window.open(`mailto:${encodeURIComponent(p.email)}?subject=${encodeURIComponent("مهمة: "+t.title)}&body=${encodeURIComponent(body)}${cc}`,"_blank");
+}
+
+// ===== العرض =====
+function render(){
+  const isBoss=myProfile.role==="boss";
+  // تنبيه القرب من الموعد
+  const soon=tasks.filter(t=>t.status!=="done"&&daysLeft(t.due_date)<=2);
+  const ab=$("#alertBox");
+  if(soon.length){ ab.classList.remove("hidden"); ab.innerHTML=`<span style="font-size:18px">⏰</span><span><b>${soon.length}</b> مهمة قاربت على الانتهاء: ${soon.map(t=>t.title).join("، ")}</span>`; }
+  else ab.classList.add("hidden");
+
+  // اللوحة
+  const board=$("#board"); board.innerHTML="";
+  COLUMNS.forEach(col=>{
+    const list=tasks.filter(t=>t.status===col.id);
+    const colEl=document.createElement("div");
+    colEl.className="col";
+    colEl.ondragover=e=>e.preventDefault();
+    colEl.ondrop=()=>{ if(dragId!=null){moveTask(dragId,col.id);dragId=null;} };
+    colEl.innerHTML=`<div class="col-head"><span class="dot" style="background:${col.accent}"></span><span class="col-title">${col.label}</span><span class="count">${list.length}</span></div>`;
+    list.forEach(t=>{
+      const dl=daysLeft(t.due_date), urgent=t.status!=="done"&&dl<=2;
+      const card=document.createElement("div");
+      card.className="card"; card.draggable=true; card.style.borderRightColor=col.accent;
+      card.ondragstart=()=>dragId=t.id;
+      const myIdx=COLUMNS.findIndex(c=>c.id===t.status);
+      const prevCol=COLUMNS[myIdx-1], nextCol=COLUMNS[myIdx+1];
+      card.innerHTML=`
+        <div class="card-top"><span class="card-title">${t.title}</span>${isBoss?`<button class="card-del">×</button>`:""}</div>
+        ${t.project?`<span class="tag">${t.project}</span>`:""}
+        <div class="meta">
+          ${t.assignee_name?`<span class="who-tag">${t.assignee_name}</span>`:"<span></span>"}
+          ${t.status!=="done"?`<span class="due ${urgent?'urgent':''}">${dl<0?`متأخرة ${-dl}ي`:dl===0?"اليوم":dl+" يوم"}</span>`:""}
+        </div>
+        <div class="move-row">
+          ${prevCol?`<button class="move-btn" data-to="${prevCol.id}">→ ${prevCol.label}</button>`:"<span></span>"}
+          ${nextCol?`<button class="move-btn move-fwd" data-to="${nextCol.id}">${nextCol.label} ←</button>`:"<span></span>"}
+        </div>
+        ${isBoss?`<button class="send">✉ أرسل بالإيميل</button>`:""}`;
+      card.querySelectorAll(".move-btn").forEach(b=>{
+        b.onclick=(e)=>{ e.stopPropagation(); moveTask(t.id, b.dataset.to); };
+      });
+      if(isBoss){
+        card.querySelector(".card-del").onclick=()=>delTask(t.id);
+        card.querySelector(".send").onclick=()=>emailTask(t);
+      }
+      colEl.appendChild(card);
+    });
+    board.appendChild(colEl);
+  });
+
+  renderDash();
+}
+
+function renderDash(){
+  const total=tasks.length, done=tasks.filter(t=>t.status==="done").length;
+  const doing=tasks.filter(t=>t.status==="doing").length;
+  const overdue=tasks.filter(t=>t.status!=="done"&&daysLeft(t.due_date)<0).length;
+  const pct=total?Math.round(done/total*100):0;
+  const byEmp={};
+  tasks.forEach(t=>{ if(!t.assignee_name)return; (byEmp[t.assignee_name]??=(byEmp[t.assignee_name]={total:0,done:0})); byEmp[t.assignee_name].total++; if(t.status==="done")byEmp[t.assignee_name].done++; });
+  const byProj={};
+  tasks.forEach(t=>{ const p=t.project||"بدون مشروع"; (byProj[p]??=(byProj[p]={total:0,done:0})); byProj[p].total++; if(t.status==="done")byProj[p].done++; });
+
+  $("#dashTab").innerHTML=`
+    <div class="stat-row">
+      <div class="stat" style="border-top-color:#3a3a3a"><div class="v">${total}</div><div class="l">إجمالي المهام</div></div>
+      <div class="stat" style="border-top-color:#5a8a6b"><div class="v" style="color:#5a8a6b">${done}</div><div class="l">مكتملة</div></div>
+      <div class="stat" style="border-top-color:#c89b3c"><div class="v" style="color:#c89b3c">${doing}</div><div class="l">جارية</div></div>
+      <div class="stat" style="border-top-color:#b5564a"><div class="v" style="color:#b5564a">${overdue}</div><div class="l">متأخرة</div></div>
+    </div>
+    <div class="panel"><div class="panel-head">نسبة الإنجاز الكلية</div>
+      <div style="font-size:40px;font-weight:700;color:#5a8a6b;margin-bottom:10px">${pct}%</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:#5a8a6b"></div></div></div>
+    <div class="panel"><div class="panel-head">الإنجاز حسب المشروع</div>
+      ${Object.entries(byProj).map(([p,v])=>{const pp=Math.round(v.done/v.total*100);return`<div class="prog"><div class="prog-label"><span>${p}</span><span>${v.done}/${v.total}</span></div><div class="bar-track"><div class="bar-fill" style="width:${pp}%;background:#c89b3c"></div></div></div>`}).join("")||"<span style='color:#aaa'>لا مشاريع بعد</span>"}</div>
+    <div class="panel"><div class="panel-head">أداء الموظفين</div>
+      ${Object.entries(byEmp).map(([e,v])=>{const pp=Math.round(v.done/v.total*100);return`<div class="prog"><div class="prog-label"><span>${e}</span><span>${v.done}/${v.total} (${pp}%)</span></div><div class="bar-track"><div class="bar-fill" style="width:${pp}%;background:#5a8a6b"></div></div></div>`}).join("")||"<span style='color:#aaa'>لا مهام مُسندة بعد</span>"}</div>`;
+}
+
+// ===== التبويبات =====
+document.querySelectorAll(".tabs button").forEach(b=>{
+  b.onclick=()=>{
+    document.querySelectorAll(".tabs button").forEach(x=>x.classList.remove("active"));
+    b.classList.add("active");
+    const t=b.dataset.tab;
+    $("#boardTab").classList.toggle("hidden",t!=="board");
+    $("#dashTab").classList.toggle("hidden",t!=="dash");
+  };
+});
+</script>
+</body>
+</html>
