@@ -46,11 +46,20 @@ const CONFIG = {
   loggedInText: [/alfursan/i, /my account/i, /log ?out/i, /sign ?out/i, /الفرسان/i, /تسجيل الخروج/i],
   // Text on the search / find-flights submit button.
   searchButtonText: [/search/i, /find flights?/i, /show flights?/i, /بحث/i, /عرض/i],
+  // Cabin classes: how to pick them in the widget + how to spot them in results.
+  cabins: {
+    economy:  { pick: /economy|guest|الاقتصادية|السياحية/i, seen: /economy|الاقتصادية|السياحية/i },
+    business: { pick: /business|رجال ?الأعمال/i,           seen: /business|رجال ?الأعمال/i },
+    first:    { pick: /first|الأولى/i,                     seen: /first|الأولى/i },
+  },
+  // Words that mean "award seats are actually available" vs "not".
+  availableHints: [/mile/i, /ميل/i, /point/i, /نقاط/i, /award/i, /استبدال/i, /الأميال/i],
+  soldOutHints: [/sold ?out|not available|unavailable|no seats|غير متاح|غير متوفر|نفد|لا توجد مقاعد/i],
 };
 
 /* ---------------- CLI args ---------------- */
 function parseArgs(argv) {
-  const a = { adults: Number(process.env.ADULTS || 1), headful: false };
+  const a = { adults: Number(process.env.ADULTS || 1), headful: false, cabin: 'economy', watch: 0 };
   for (let i = 2; i < argv.length; i++) {
     const k = argv[i];
     const v = argv[i + 1];
@@ -60,10 +69,13 @@ function parseArgs(argv) {
       case '--date': a.date = v; i++; break;
       case '--return': a.ret = v; i++; break;
       case '--adults': a.adults = Number(v); i++; break;
+      case '--cabin': a.cabin = (v || 'economy').toLowerCase(); i++; break;
+      case '--watch': a.watch = Number(v || 15); i++; break;
       case '--headful': a.headful = true; break;
       case '--help': case '-h': a.help = true; break;
     }
   }
+  if (!CONFIG.cabins[a.cabin]) a.cabin = 'economy';
   return a;
 }
 
@@ -79,12 +91,20 @@ Options:
   --date    Departure date            (YYYY-MM-DD)
   --return  Return date (optional; omit for one-way)
   --adults  Passengers (default 1)
+  --cabin   economy | business | first   (default economy)
+  --watch   N   keep checking every N minutes and ALERT when award
+                seats appear for the chosen cabin (e.g. --watch 15)
   --headful Show the browser window (default: it is shown anyway on first login)
   --help    This help
 
 Examples:
   node search.js --from JED --to DXB --date 2026-08-15
   node search.js --from RUH --to LHR --date 2026-09-01 --return 2026-09-10 --adults 2
+  node search.js --from JED --to LHR --date 2026-09-01 --cabin business --watch 15
+
+Alerts (optional): put a Telegram bot token + chat id in .env and a message
+is pushed to your PHONE the moment award seats show up. Without them, the
+watcher just beeps and prints in the terminal.
 `);
 }
 
@@ -207,6 +227,9 @@ async function runSearch(page, args) {
   // 3) Dates.
   await fillDate(page, args.date, args.ret);
 
+  // 3b) Cabin class.
+  await pickCabin(page, args.cabin);
+
   // 4) Submit.
   const searchBtn = await firstVisible(page, CONFIG.searchButtonText.map(
     (re) => () => page.getByRole('button', { name: re })
@@ -248,6 +271,25 @@ async function fillCity(page, which, code) {
   console.log(`✓ ${which.toUpperCase()} = ${code}`);
 }
 
+async function pickCabin(page, cabin) {
+  const re = CONFIG.cabins[cabin]?.pick;
+  if (!re) return;
+  // open a cabin/class chooser if there is one, then pick the option
+  const opener = await firstVisible(page, [
+    () => page.getByRole('button', { name: /class|cabin|economy|business|الدرجة|المقصورة/i }),
+    () => page.getByText(/class|cabin|الدرجة|المقصورة/i),
+  ]);
+  if (opener) { await opener.click().catch(() => {}); await page.waitForTimeout(700); }
+  const opt = await firstVisible(page, [
+    () => page.getByRole('option', { name: re }),
+    () => page.getByRole('radio', { name: re }),
+    () => page.getByText(re),
+  ]);
+  if (opt) { await opt.click().catch(() => {}); console.log(`✓ Cabin = ${cabin}`); }
+  else console.log(`! Could not set cabin "${cabin}" automatically (will read it from results instead).`);
+  await page.keyboard.press('Escape').catch(() => {});
+}
+
 async function fillDate(page, dateStr, retStr) {
   const dateBox = await firstVisible(page, [
     () => page.getByLabel(/depart|date|going|التاريخ|المغادرة/i),
@@ -286,6 +328,39 @@ async function scrapeResults(page) {
   return out;
 }
 
+/* ---------------- availability + alerts ---------------- */
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// Decide whether the captured results contain bookable AWARD seats for a cabin.
+function evaluateAvailability(results, cabin) {
+  const seen = CONFIG.cabins[cabin]?.seen;
+  const matches = results.filter((t) => {
+    const milesOK = CONFIG.availableHints.some((re) => re.test(t));
+    const notSold = !CONFIG.soldOutHints.some((re) => re.test(t));
+    const cabinOK = seen ? seen.test(t) : true;
+    return milesOK && notSold && cabinOK;
+  });
+  return { available: matches.length > 0, matches };
+}
+
+// Push an alert to your phone via Telegram (if configured); always beeps locally.
+async function notify(title, text) {
+  process.stdout.write('\x07'); // terminal bell
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chat = process.env.TELEGRAM_CHAT_ID;
+  if (!token || !chat) return;
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chat, text: `${title}\n\n${text}`.slice(0, 3900) }),
+    });
+    console.log(res.ok ? '  → Telegram alert sent to your phone.' : `  ! Telegram error ${res.status}`);
+  } catch (e) {
+    console.log('  ! Telegram send failed:', e.message);
+  }
+}
+
 /* ---------------- main ---------------- */
 (async () => {
   const args = parseArgs(process.argv);
@@ -305,7 +380,8 @@ async function scrapeResults(page) {
   }
 
   console.log(`\nAlfursan miles search: ${args.from} → ${args.to}  on ${args.date}` +
-    `${args.ret ? '  (return ' + args.ret + ')' : ''}  ·  ${args.adults} adult(s)\n`);
+    `${args.ret ? '  (return ' + args.ret + ')' : ''}  ·  ${args.adults} adult(s)  ·  cabin: ${args.cabin}` +
+    `${args.watch ? '  ·  WATCH every ' + args.watch + ' min' : ''}\n`);
 
   const context = await chromium.launchPersistentContext(CONFIG.profileDir, {
     headless: false, // a real window — needed for first login and for reliability
@@ -315,33 +391,77 @@ async function scrapeResults(page) {
   const page = context.pages()[0] || (await context.newPage());
   page.setDefaultTimeout(CONFIG.timeoutMs);
 
-  try {
-    await ensureLoggedIn(page);
-    // return to a clean booking start after login
+  const stamp = args.date + '_' + args.from + '-' + args.to + '_' + args.cabin;
+
+  // one full search + scrape, returning the captured cards
+  const doSearch = async () => {
     await page.goto(CONFIG.siteUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
     await page.waitForTimeout(2500);
-
     await runSearch(page, args);
+    return scrapeResults(page);
+  };
 
-    const results = await scrapeResults(page);
-    const stamp = args.date + '_' + args.from + '-' + args.to;
-    const jsonFile = path.join(CONFIG.resultsDir, `award_${stamp}.json`);
-    const shotFile = await shot(page, `results_${stamp}`);
-    fs.writeFileSync(jsonFile, JSON.stringify({ query: args, capturedText: results }, null, 2));
+  try {
+    await ensureLoggedIn(page);
 
-    console.log('\n══════════════ AWARD RESULTS ══════════════');
-    if (results.length) {
-      results.forEach((r, i) => console.log(`\n[${i + 1}]\n${r}`));
+    if (args.watch > 0) {
+      // ===== WATCH MODE: keep checking, alert when award seats appear =====
+      console.log(`\n👀 Watching ${args.from} → ${args.to} · ${args.cabin} · every ${args.watch} min.`);
+      console.log(process.env.TELEGRAM_BOT_TOKEN
+        ? '   Alerts will be pushed to your phone via Telegram.'
+        : '   (No Telegram configured — it will beep + print here. Add TELEGRAM_* to .env for phone alerts.)');
+      console.log('   Press Ctrl+C to stop.\n');
+
+      let round = 0;
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        round++;
+        const when = new Date().toLocaleTimeString();
+        const results = await doSearch().catch((e) => { console.log('  check failed:', e.message); return []; });
+        const { available, matches } = evaluateAvailability(results, args.cabin);
+        await shot(page, `watch_${stamp}_${round}`);
+
+        if (available) {
+          const body = `${args.from} ← ${args.to}\n${args.date}${args.ret ? ' → ' + args.ret : ''} · ${args.cabin} · ${args.adults} pax\n\n`
+            + matches.slice(0, 3).join('\n———\n');
+          console.log('\n' + '★'.repeat(40));
+          console.log(`🎉 AWARD SEATS FOUND (${args.cabin})  [${when}]`);
+          console.log(body);
+          console.log('★'.repeat(40) + '\n');
+          await notify(`🎉 Alfursan: ${args.from}→${args.to} ${args.cabin} seats!`, body);
+          const ans = await Promise.race([
+            ask('Seats found! Press ENTER to keep watching, or type stop to finish: '),
+            sleep(60000).then(() => ''),
+          ]);
+          if (String(ans).toLowerCase() === 'stop') break;
+        } else {
+          console.log(`[${when}] check #${round}: no ${args.cabin} award seats yet — next in ${args.watch} min.`);
+        }
+        await sleep(args.watch * 60 * 1000);
+      }
     } else {
-      console.log('No flight cards were captured automatically.');
-      console.log('The page may use a layout I have not calibrated yet —');
-      console.log(`look at the screenshot to see what loaded:\n  ${shotFile}`);
+      // ===== SINGLE SEARCH =====
+      const results = await doSearch();
+      const { available, matches } = evaluateAvailability(results, args.cabin);
+      const jsonFile = path.join(CONFIG.resultsDir, `award_${stamp}.json`);
+      const shotFile = await shot(page, `results_${stamp}`);
+      fs.writeFileSync(jsonFile, JSON.stringify({ query: args, available, capturedText: results }, null, 2));
+
+      console.log(`\n══════════════ AWARD RESULTS (${args.cabin}) ══════════════`);
+      if (results.length) {
+        results.forEach((r, i) => console.log(`\n[${i + 1}]\n${r}`));
+        console.log(`\n${available ? '✅ Looks like award seats ARE available for ' + args.cabin
+          : '⚠️  No clear ' + args.cabin + ' award availability detected in the captured cards.'}`);
+      } else {
+        console.log('No flight cards were captured automatically.');
+        console.log(`Look at the screenshot to see what loaded:\n  ${shotFile}`);
+      }
+      console.log('\n────────────────────────────────────────────');
+      console.log(`Full page screenshot : ${shotFile}`);
+      console.log(`Raw data saved to    : ${jsonFile}`);
+      console.log('\nLeaving the browser open so you can book with miles if you like.');
+      await ask('Press ENTER to close the browser… ');
     }
-    console.log('\n────────────────────────────────────────────');
-    console.log(`Full page screenshot : ${shotFile}`);
-    console.log(`Raw data saved to    : ${jsonFile}`);
-    console.log('\nLeaving the browser open so you can book with miles if you like.');
-    await ask('Press ENTER to close the browser… ');
   } catch (err) {
     console.error('\n✗ Something went wrong:', err.message);
     const f = await shot(page, 'error');

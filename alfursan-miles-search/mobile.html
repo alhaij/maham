@@ -62,6 +62,7 @@
 
   .route{position:relative;display:grid;grid-template-columns:1fr;gap:10px}
   .field{display:flex;flex-direction:column;gap:6px}
+  .field[hidden]{display:none}
   .field label{font-size:11.5px;font-weight:700;color:var(--muted);letter-spacing:.3px;padding-inline-start:2px}
   .field .ctrl{display:flex;align-items:center;gap:10px;background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:11px 13px}
   .field .ctrl:focus-within{border-color:var(--green);box-shadow:0 0 0 3px color-mix(in srgb,var(--green) 18%,transparent)}
@@ -114,6 +115,27 @@
   .ritem .go{margin-inline-start:auto;color:var(--green);font-size:15px}
   .ritem .del{border:none;background:transparent;color:var(--muted);font-size:19px;cursor:pointer;line-height:1;padding:0 2px}
   .empty{font-size:12.5px;color:var(--muted);text-align:center;padding:14px}
+
+  /* cabin badge */
+  .badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:800;padding:3px 9px;border-radius:999px;letter-spacing:.2px}
+  .badge::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+  .badge.eco{color:var(--green);background:color-mix(in srgb,var(--green) 15%,transparent)}
+  .badge.biz{color:var(--gold);background:color-mix(in srgb,var(--gold) 18%,transparent)}
+  .badge.first{color:#8a6bd8;background:color-mix(in srgb,#8a6bd8 16%,transparent)}
+
+  /* watch section */
+  .wh-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+  .wh-head h2{font-size:15px;font-weight:800;margin:0}
+  .bell{margin-inline-start:auto;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--panel-2);color:var(--muted);font-family:inherit;font-size:12px;font-weight:700;padding:7px 12px;border-radius:999px;cursor:pointer;transition:.15s}
+  .bell.on{border-color:var(--green);color:var(--green);background:color-mix(in srgb,var(--green) 12%,transparent)}
+  .witem{display:flex;align-items:center;gap:11px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:11px 13px}
+  .witem .body{min-width:0}
+  .witem .pair{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:.4px}
+  .witem .meta{font-size:11.5px;color:var(--muted);margin-top:3px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .witem .chk{margin-inline-start:auto;border:none;background:var(--green);color:#fff;font-family:inherit;font-size:12.5px;font-weight:800;padding:8px 13px;border-radius:10px;cursor:pointer;white-space:nowrap}
+  .witem .del{border:none;background:transparent;color:var(--muted);font-size:19px;cursor:pointer;line-height:1;padding:0 2px}
+  .mini{font-size:11px;color:var(--muted);line-height:1.6;margin:11px 2px 0;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:9px 11px}
+  .mini b{color:var(--gold)}
 
   .foot{font-size:11.5px;color:var(--muted);line-height:1.7;text-align:center;padding:4px 8px}
   .toast{position:fixed;inset-inline:0;bottom:22px;margin:0 auto;width:max-content;max-width:88%;background:var(--green-deep);color:#fff;font-size:13px;font-weight:600;padding:11px 18px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.3);opacity:0;transform:translateY(12px);transition:.25s;pointer-events:none;z-index:9}
@@ -200,12 +222,26 @@
       </div>
 
       <button class="cta" id="go">افتح السعودية بالأميال ←</button>
+      <button class="ghost" id="mkAlert">🔔 أنشئ تنبيه لهذي الرحلة والدرجة</button>
       <button class="ghost" id="copy">انسخ تفاصيل الرحلة</button>
 
       <div class="summary" id="summary" aria-live="polite">
         <div class="big" id="sumBig"></div>
         <div class="sub" id="sumSub"></div>
       </div>
+    </section>
+
+    <section class="card">
+      <div class="wh-head">
+        <h2>تنبيهاتي للمقاعد</h2>
+        <button class="bell" id="bell">🔔 فعّل التذكير</button>
+      </div>
+      <div class="rlist" id="wlist"></div>
+      <p class="mini">
+        هذه القائمة تحفظ رحلاتك حسب <b>الدرجة</b> وتذكّرك تتحقق (والتذكير يشتغل والصفحة مفتوحة).
+        للتنبيه <b>الحيّ التلقائي</b> — يطنّ لك أول ما تنزل مقاعد بالأميال حتى والجوّال مقفول —
+        شغّل أداة <b>search.js --watch</b> على الكمبيوتر مع تليجرام، وتوصلك الرسالة على جوّالك.
+      </p>
     </section>
 
     <section class="recent">
@@ -367,6 +403,81 @@
     catch{toast("تعذّر النسخ — انسخها من الملخص");showSummary(c);}
   };
 
+  /* ===== seat alerts / watchlist (by cabin) ===== */
+  const WKEY="alfursan_watch_v1";
+  const BADGE={economy:["eco","اقتصادية"],business:["biz","رجال أعمال"],first:["first","الأولى"]};
+  function cabinBadge(c){const [cls,txt]=BADGE[c]||BADGE.economy;return `<span class="badge ${cls}">${txt}</span>`;}
+  function loadW(){try{return JSON.parse(localStorage.getItem(WKEY))||[]}catch{return[]}}
+  function saveW(l){try{localStorage.setItem(WKEY,JSON.stringify(l.slice(0,12)))}catch{}}
+
+  function renderW(){
+    const list=loadW(), el=$("#wlist");
+    if(!list.length){el.innerHTML='<div class="empty">ما فيه تنبيهات — عبّي رحلة واضغط «أنشئ تنبيه» 🔔</div>';return;}
+    el.innerHTML="";
+    list.forEach((c,i)=>{
+      const row=document.createElement("div"); row.className="witem";
+      row.innerHTML=`<div class="body">
+          <div class="pair">${c.from} ← ${c.to}</div>
+          <div class="meta">${cabinBadge(c.cabin)} <span>${fmtDate(c.dep)}${c.round&&c.ret?" ← "+fmtDate(c.ret):""}</span> <span>· ${c.pax} مسافر</span></div>
+        </div>
+        <button class="chk">تحقق الآن</button>
+        <button class="del" aria-label="حذف">×</button>`;
+      row.querySelector(".chk").onclick=()=>{
+        remember(c); showSummary(c);
+        try{navigator.clipboard&&navigator.clipboard.writeText(plainSummary(c));}catch{}
+        toast("فُتح موقع السعودية — اختر «الأميال» و"+CABINS[c.cabin]);
+        window.open(SAUDIA,"_blank","noopener");
+      };
+      row.querySelector(".del").onclick=()=>{const l=loadW();l.splice(i,1);saveW(l);renderW();};
+      el.appendChild(row);
+    });
+  }
+
+  function addWatch(c){
+    const list=loadW().filter(x=>!(x.from===c.from&&x.to===c.to&&x.dep===c.dep&&x.cabin===c.cabin));
+    list.unshift(c); saveW(list); renderW();
+  }
+
+  $("#mkAlert").onclick=()=>{
+    if(!validate()){toast("أكمل الرحلة والدرجة أولاً");return;}
+    const c=current(); addWatch(c);
+    toast("انضافت للتنبيهات — "+CABINS[c.cabin]+" ✓");
+    if(bellOn) notify("تنبيه جديد", c.from+" ← "+c.to+" · "+CABINS[c.cabin]+" — راح نذكّرك تتحقق");
+    else toast("فعّل التذكير 🔔 عشان يوصلك تنبيه");
+  };
+
+  /* reminders (fire while the page is open) */
+  let bellOn=false;
+  function notify(title,body){
+    try{ if("Notification" in window && Notification.permission==="granted") new Notification(title,{body,icon:"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E"}); }catch{}
+  }
+  function setBell(on){
+    bellOn=on;
+    const b=$("#bell");
+    b.classList.toggle("on",on);
+    b.textContent = on? "🔔 التذكير مفعّل" : "🔔 فعّل التذكير";
+    try{localStorage.setItem("alfursan_bell",on?"1":"0")}catch{}
+  }
+  $("#bell").onclick=async()=>{
+    if(bellOn){setBell(false);toast("أُوقف التذكير");return;}
+    if(!("Notification" in window)){toast("جهازك ما يدعم تنبيهات المتصفح");return;}
+    let p=Notification.permission;
+    if(p!=="granted") p=await Notification.requestPermission();
+    if(p==="granted"){setBell(true);toast("تم — راح نذكّرك بالتحقق دوريًا");notify("تنبيهات الأميال مفعّلة","راح نذكّرك تتحقق من مقاعدك بالأميال");}
+    else toast("ما سمحت بالتنبيهات — فعّلها من إعدادات المتصفح");
+  };
+  // gentle reminder loop while open: every 3h, nudge for the oldest watch
+  setInterval(()=>{
+    if(!bellOn) return;
+    const list=loadW(); if(!list.length) return;
+    const c=list[0];
+    notify("تذكير: تحقق من مقاعدك", c.from+" ← "+c.to+" · "+CABINS[c.cabin]+" — افتح الصفحة واضغط «تحقق الآن»");
+  }, 3*60*60*1000);
+
+  // restore bell state
+  try{ if(localStorage.getItem("alfursan_bell")==="1" && Notification.permission==="granted") setBell(true); }catch{}
+
+  renderW();
   render(); validate();
 })();
 </script>

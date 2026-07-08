@@ -54,14 +54,38 @@ node search.js --from RUH --to LHR --date 2026-09-01 --return 2026-09-10 --adult
 node search.js --from JED --to CAI --date 2026-08-15
 ```
 
-| Option     | Meaning                                    |
-|------------|--------------------------------------------|
-| `--from`   | Origin airport code (JED, RUH, DMM, …)     |
-| `--to`     | Destination airport code (DXB, LHR, CAI …) |
-| `--date`   | Departure date, `YYYY-MM-DD`               |
-| `--return` | Return date (leave out for one-way)        |
-| `--adults` | Number of passengers (default 1)           |
-| `--help`   | Show usage                                 |
+| Option     | Meaning                                        |
+|------------|------------------------------------------------|
+| `--from`   | Origin airport code (JED, RUH, DMM, …)         |
+| `--to`     | Destination airport code (DXB, LHR, CAI …)     |
+| `--date`   | Departure date, `YYYY-MM-DD`                   |
+| `--return` | Return date (leave out for one-way)            |
+| `--adults` | Number of passengers (default 1)               |
+| `--cabin`  | `economy` \| `business` \| `first` (default economy) |
+| `--watch`  | Keep checking every N minutes and **alert** when award seats appear |
+| `--help`   | Show usage                                      |
+
+### Alerts — get told the moment seats open (by cabin)
+
+```bash
+# check Business award seats JED→London every 15 minutes, alert when they appear
+node search.js --from JED --to LHR --date 2026-09-01 --cabin business --watch 15
+```
+
+Leave this running on your computer. Each round it re-searches, and when it
+finds **award (miles) seats in your chosen cabin** it:
+
+- **beeps** and prints the flights, and
+- **pushes a message to your phone via Telegram** — so you get pinged even
+  when you're away from the computer.
+
+Setting up the Telegram phone-ping takes about 5 minutes (free) — the steps are
+in `.env.example`. If you skip it, `--watch` still beeps and prints locally.
+
+> Seat detection reads the results Saudia shows and looks for miles/award
+> wording in your cabin. On the very first run, glance at a screenshot in
+> `screenshots/` to confirm it's reading the right thing — if not, send it to me
+> and I'll tune the `CONFIG` at the top of `search.js`.
 
 **The first run:** a Chrome window opens → log into Alfursan → come back to the
 terminal and press **ENTER**. From then on it remembers you.
