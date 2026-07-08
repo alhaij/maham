@@ -1,0 +1,16 @@
+{
+  "name": "alfursan-app",
+  "version": "1.0.0",
+  "description": "Fully-automated Saudia Alfursan award (miles) flight search — phone frontend + Playwright backend.",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "login": "node -e \"import('./automation.js').then(a=>a.login()).then(r=>{console.log(r);process.exit(0)})\"",
+    "postinstall": "playwright install chromium"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "playwright": "^1.48.0"
+  }
+}

@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%E2%9C%88%3C/text%3E%3C/svg%3E" />
+<title>أميال الفرسان — بحث تلقائي</title>
+<style>
+  :root{
+    --bg:#eef3ef; --panel:#fff; --panel-2:#f5f8f5; --ink:#0f3527; --muted:#5f7268;
+    --line:#dbe6df; --green:#0a6b4a; --green-deep:#064c34; --gold:#a9812a;
+    --gold-soft:#f2e7c9; --danger:#b5564a; --ok:#0a6b4a; --shadow:0 6px 24px rgba(6,50,36,.10);
+  }
+  @media (prefers-color-scheme:dark){
+    :root{--bg:#06231a;--panel:#0e3628;--panel-2:#0a2c20;--ink:#eaf3ee;--muted:#93ab9f;
+      --line:#1c4a39;--green:#2ea37a;--green-deep:#0f2e22;--gold:#d6b25c;--gold-soft:#2a3a2c;
+      --shadow:0 8px 30px rgba(0,0,0,.35);}
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"SF Arabic","SF Pro Text","Segoe UI",Tahoma,Arial,sans-serif;
+    background:radial-gradient(120% 60% at 85% -10%,color-mix(in srgb,var(--green) 16%,transparent),transparent 60%),var(--bg);
+    color:var(--ink);min-height:100vh;padding:18px 14px 40px;-webkit-font-smoothing:antialiased}
+  .shell{max-width:470px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+  .head{display:flex;align-items:center;gap:12px}
+  .mark{width:46px;height:46px;border-radius:13px;background:linear-gradient(150deg,var(--green),var(--green-deep));
+    display:grid;place-items:center;color:#fff;font-size:22px;box-shadow:0 4px 14px color-mix(in srgb,var(--green) 40%,transparent)}
+  .head h1{margin:0;font-size:20px;font-weight:800}
+  .head p{margin:2px 0 0;font-size:12.5px;color:var(--muted)}
+
+  .banner{border-radius:12px;padding:11px 13px;font-size:13px;display:flex;gap:9px;align-items:center;line-height:1.5}
+  .banner.warn{background:var(--gold-soft);border:1px solid color-mix(in srgb,var(--gold) 40%,var(--line));color:var(--ink)}
+  .banner.ok{background:color-mix(in srgb,var(--ok) 14%,transparent);border:1px solid color-mix(in srgb,var(--ok) 35%,var(--line));color:var(--ink)}
+  .banner button{margin-inline-start:auto;border:none;background:var(--green);color:#fff;font-family:inherit;font-weight:800;font-size:12.5px;padding:8px 13px;border-radius:9px;cursor:pointer;white-space:nowrap}
+
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);padding:16px}
+  .seg{display:flex;background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:4px;gap:4px;margin-bottom:14px}
+  .seg button{flex:1;border:none;background:transparent;color:var(--muted);font-family:inherit;font-size:13.5px;font-weight:700;padding:9px;border-radius:9px;cursor:pointer}
+  .seg button[aria-pressed="true"]{background:var(--panel);color:var(--ink);box-shadow:0 1px 4px rgba(0,0,0,.08)}
+
+  .field{position:relative;display:flex;flex-direction:column;gap:6px;margin-bottom:12px}
+  .field[hidden]{display:none}
+  .field>label{font-size:11.5px;font-weight:700;color:var(--muted);letter-spacing:.3px;padding-inline-start:2px}
+  .ctrl{display:flex;align-items:center;gap:10px;background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:11px 13px}
+  .ctrl:focus-within{border-color:var(--green);box-shadow:0 0 0 3px color-mix(in srgb,var(--green) 18%,transparent)}
+  .ico{font-size:16px;color:var(--green)}
+  .ctrl input,.ctrl select{border:none;background:transparent;color:var(--ink);font-family:inherit;font-size:16px;font-weight:600;width:100%;outline:none}
+  .ctrl input::placeholder{color:var(--muted);font-weight:500}
+  .chosen{font-size:11px;color:var(--green);font-weight:700;min-height:13px;padding-inline-start:2px}
+
+  /* autocomplete dropdown */
+  .ac{position:absolute;z-index:20;top:100%;inset-inline:0;margin-top:6px;background:var(--panel);border:1px solid var(--line);
+    border-radius:12px;box-shadow:var(--shadow);overflow:hidden;max-height:280px;overflow-y:auto;display:none}
+  .ac.open{display:block}
+  .ac div{display:flex;align-items:center;gap:11px;padding:11px 13px;cursor:pointer;border-bottom:1px solid var(--line)}
+  .ac div:last-child{border-bottom:none}
+  .ac div:hover,.ac div.hi{background:var(--panel-2)}
+  .ac .code{font-weight:800;font-variant-numeric:tabular-nums;font-size:14px;background:color-mix(in srgb,var(--green) 14%,transparent);color:var(--green);border-radius:7px;padding:3px 8px;min-width:44px;text-align:center}
+  .ac .nm{font-size:14px;font-weight:600}.ac .nm small{display:block;color:var(--muted);font-weight:500;font-size:11.5px}
+
+  .swap{position:absolute;inset-inline-end:14px;top:34px;z-index:5;width:36px;height:36px;border-radius:50%;
+    border:1px solid var(--line);background:var(--panel);color:var(--green);font-size:16px;cursor:pointer;box-shadow:var(--shadow)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .stepper{display:flex;align-items:center;justify-content:space-between}
+  .stepper button{width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font-size:19px;font-weight:700;cursor:pointer}
+  .stepper .n{font-size:17px;font-weight:800;font-variant-numeric:tabular-nums}
+
+  .cta{margin-top:6px;width:100%;border:none;cursor:pointer;background:linear-gradient(150deg,var(--green),var(--green-deep));
+    color:#fff;font-family:inherit;font-size:16px;font-weight:800;padding:15px;border-radius:13px;
+    display:flex;align-items:center;justify-content:center;gap:9px;box-shadow:0 6px 18px color-mix(in srgb,var(--green) 38%,transparent)}
+  .cta:disabled{filter:grayscale(.5) brightness(.92);cursor:not-allowed;box-shadow:none}
+  .spin{width:17px;height:17px;border:2.5px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+
+  .results{display:flex;flex-direction:column;gap:10px}
+  .rhead{font-size:14px;font-weight:800;display:flex;align-items:center;gap:8px}
+  .pill{font-size:11px;font-weight:800;padding:3px 10px;border-radius:999px}
+  .pill.good{background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok)}
+  .pill.none{background:color-mix(in srgb,var(--danger) 14%,transparent);color:var(--danger)}
+  .flight{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:13px;white-space:pre-line;font-size:13px;line-height:1.6}
+  .flight.match{border-color:var(--green);box-shadow:0 0 0 2px color-mix(in srgb,var(--green) 18%,transparent)}
+  .msg{font-size:13px;color:var(--muted);line-height:1.6;background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:12px}
+  .msg.err{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 40%,var(--line))}
+  .foot{font-size:11.5px;color:var(--muted);text-align:center;line-height:1.7;padding:2px 8px}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="head">
+    <div class="mark">✈</div>
+    <div><h1>أميال الفرسان</h1><p>بحث تلقائي عن رحلات تحجزها بأميالك</p></div>
+  </div>
+
+  <div id="statusBanner" class="banner warn" style="display:none"></div>
+
+  <div class="card">
+    <div class="seg" role="group">
+      <button id="tOne" aria-pressed="true">ذهاب فقط</button>
+      <button id="tRound" aria-pressed="false">ذهاب وعودة</button>
+    </div>
+
+    <div class="field" id="fromField">
+      <label for="from">من</label>
+      <div class="ctrl"><span class="ico">🛫</span><input id="from" autocomplete="off" placeholder="اكتب حرف: J → جدة" /></div>
+      <div class="chosen" id="fromChosen"></div>
+      <div class="ac" id="fromAc"></div>
+    </div>
+
+    <button class="swap" id="swap" title="تبديل" aria-label="تبديل">⇅</button>
+
+    <div class="field" id="toField">
+      <label for="to">إلى</label>
+      <div class="ctrl"><span class="ico">🛬</span><input id="to" autocomplete="off" placeholder="اكتب حرف: D → دبي" /></div>
+      <div class="chosen" id="toChosen"></div>
+      <div class="ac" id="toAc"></div>
+    </div>
+
+    <div class="grid2">
+      <div class="field"><label for="dep">تاريخ الذهاب</label>
+        <div class="ctrl"><span class="ico">📅</span><input id="dep" type="date" /></div></div>
+      <div class="field" id="retField" hidden><label for="ret">تاريخ العودة</label>
+        <div class="ctrl"><span class="ico">📅</span><input id="ret" type="date" /></div></div>
+    </div>
+
+    <div class="grid2">
+      <div class="field"><label>المسافرون</label>
+        <div class="ctrl stepper"><button id="pMinus" aria-label="أقل">−</button>
+          <span class="n" id="pN">1</span><button id="pPlus" aria-label="أكثر">+</button></div></div>
+      <div class="field"><label for="cabin">الدرجة</label>
+        <div class="ctrl"><span class="ico">💺</span>
+          <select id="cabin"><option value="economy">الاقتصادية</option>
+            <option value="business">رجال الأعمال</option><option value="first">الأولى</option></select></div></div>
+    </div>
+
+    <button class="cta" id="go" disabled><span id="goTxt">ابحث بالأميال</span></button>
+  </div>
+
+  <div class="results" id="results"></div>
+
+  <p class="foot">يعمل عبر خادم على جهازك — يسجّل الدخول ويبحث تلقائيًا في السعودية.<br>كلمة مرورك تبقى على جهازك فقط.</p>
+</div>
+
+<script>
+const $=s=>document.querySelector(s);
+const state={from:null,to:null,round:false,pax:1};
+
+/* ---- trip type ---- */
+function setRound(r){state.round=r;$("#tOne").setAttribute("aria-pressed",!r);$("#tRound").setAttribute("aria-pressed",r);$("#retField").hidden=!r;}
+$("#tOne").onclick=()=>setRound(false);$("#tRound").onclick=()=>setRound(true);
+
+/* ---- passengers ---- */
+$("#pPlus").onclick=()=>{state.pax=Math.min(9,state.pax+1);$("#pN").textContent=state.pax;};
+$("#pMinus").onclick=()=>{state.pax=Math.max(1,state.pax-1);$("#pN").textContent=state.pax;};
+
+/* ---- date default ---- */
+const iso=d=>d.toISOString().slice(0,10);const today=new Date();
+$("#dep").min=iso(today);$("#ret").min=iso(today);$("#dep").value=iso(new Date(Date.now()+3*864e5));
+
+/* ---- Saudia city autocomplete ---- */
+function attachAC(inputId,acId,chosenId,key){
+  const input=$("#"+inputId),ac=$("#"+acId),chosen=$("#"+chosenId);let items=[],hi=-1,timer;
+  async function query(q){
+    try{const r=await fetch("/api/airports?q="+encodeURIComponent(q));items=await r.json();}
+    catch{items=[];}
+    render();
+  }
+  function render(){
+    if(!items.length){ac.classList.remove("open");ac.innerHTML="";return;}
+    ac.innerHTML=items.map((a,i)=>`<div data-i="${i}" class="${i===hi?'hi':''}">
+      <span class="code">${a.code}</span><span class="nm">${a.ar}<small>${a.en} · ${a.code}</small></span></div>`).join("");
+    ac.classList.add("open");
+    ac.querySelectorAll("div[data-i]").forEach(el=>el.onclick=()=>choose(items[+el.dataset.i]));
+  }
+  function choose(a){
+    state[key]=a;input.value=a.ar+" — "+a.code;chosen.textContent="✓ "+a.en+" ("+a.code+")";
+    ac.classList.remove("open");validate();
+  }
+  input.addEventListener("input",()=>{
+    state[key]=null;chosen.textContent="";validate();
+    clearTimeout(timer);const q=input.value.trim();
+    if(!q){ac.classList.remove("open");return;}
+    timer=setTimeout(()=>query(q),140);
+  });
+  input.addEventListener("keydown",e=>{
+    if(!ac.classList.contains("open"))return;
+    if(e.key==="ArrowDown"){hi=Math.min(items.length-1,hi+1);render();e.preventDefault();}
+    else if(e.key==="ArrowUp"){hi=Math.max(0,hi-1);render();e.preventDefault();}
+    else if(e.key==="Enter"){if(items[hi]){choose(items[hi]);e.preventDefault();}}
+    else if(e.key==="Escape"){ac.classList.remove("open");}
+  });
+  input.addEventListener("blur",()=>setTimeout(()=>ac.classList.remove("open"),180));
+}
+attachAC("from","fromAc","fromChosen","from");
+attachAC("to","toAc","toChosen","to");
+
+$("#swap").onclick=()=>{
+  const a=state.from,b=state.to;state.from=b;state.to=a;
+  const setF=(id,ch,v)=>{$("#"+id).value=v?v.ar+" — "+v.code:"";$("#"+ch).textContent=v?"✓ "+v.en+" ("+v.code+")":"";};
+  setF("from","fromChosen",state.from);setF("to","toChosen",state.to);validate();
+};
+
+function validate(){
+  const ok=state.from&&state.to&&state.from.code!==state.to.code&&$("#dep").value;
+  $("#go").disabled=!ok;return ok;
+}
+$("#dep").addEventListener("input",validate);
+
+/* ---- login status ---- */
+async function refreshStatus(){
+  const b=$("#statusBanner");
+  try{
+    const r=await fetch("/api/status");const s=await r.json();
+    if(s.loggedIn){b.className="banner ok";b.style.display="flex";b.innerHTML="✓ مسجّل دخول في الفرسان — جاهز للبحث التلقائي";}
+    else{b.className="banner warn";b.style.display="flex";
+      b.innerHTML='⚠ لست مسجّلاً في الفرسان بعد <button id="loginBtn">تسجيل الدخول</button>';
+      $("#loginBtn").onclick=doLogin;}
+  }catch{b.className="banner warn";b.style.display="flex";b.textContent="⚠ الخادم لا يعمل — شغّل npm start على الكمبيوتر";}
+}
+async function doLogin(){
+  const b=$("#statusBanner");b.innerHTML="… جارٍ فتح صفحة الدخول على الكمبيوتر (أكمل CAPTCHA/OTP هناك)";
+  try{const r=await fetch("/api/login",{method:"POST"});const s=await r.json();
+    if(s.loggedIn){refreshStatus();}else{b.className="banner warn";b.style.display="flex";
+      b.textContent="أكمل تسجيل الدخول في نافذة المتصفح على الكمبيوتر، ثم اضغط تحديث";
+      setTimeout(refreshStatus,6000);}
+  }catch{b.textContent="تعذّر بدء الدخول — تأكد أن الخادم يعمل";}
+}
+
+/* ---- run search ---- */
+$("#go").onclick=async()=>{
+  if(!validate())return;
+  const go=$("#go"),txt=$("#goTxt"),res=$("#results");
+  go.disabled=true;txt.innerHTML='<span class="spin"></span> يبحث في السعودية…';
+  res.innerHTML='<div class="msg">⏳ يفتح السعودية، يحوّل للأميال، ويقرأ الرحلات — قد يأخذ نصف دقيقة.</div>';
+  const body={from:state.from.code,to:state.to.code,date:$("#dep").value,
+    ret:state.round?$("#ret").value:"",adults:state.pax,cabin:$("#cabin").value};
+  try{
+    const r=await fetch("/api/search",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    const d=await r.json();renderResults(d,body);
+  }catch(e){res.innerHTML='<div class="msg err">تعذّر الاتصال بالخادم: '+e.message+'</div>';}
+  go.disabled=false;txt.textContent="ابحث بالأميال";validate();
+};
+
+function renderResults(d,body){
+  const res=$("#results");
+  if(d.needLogin){res.innerHTML='<div class="msg err">لست مسجّلاً في الفرسان. اضغط «تسجيل الدخول» في الأعلى أولاً.</div>';refreshStatus();return;}
+  if(!d.ok){res.innerHTML='<div class="msg err">'+(d.error||"صار خطأ")+'</div>';return;}
+  const cab={economy:"الاقتصادية",business:"رجال الأعمال",first:"الأولى"}[body.cabin];
+  let html=`<div class="rhead">${body.from} ← ${body.to} · ${cab}
+    <span class="pill ${d.available?'good':'none'}">${d.available?'✓ يوجد مقاعد بالأميال':'لا مقاعد واضحة'}</span></div>`;
+  if(d.flights&&d.flights.length){
+    const matchSet=new Set((d.matches||[]));
+    html+=d.flights.map(f=>`<div class="flight ${matchSet.has(f)?'match':''}">${f.replace(/</g,'&lt;')}</div>`).join("");
+  }else{
+    html+=`<div class="msg">لم يُلتقط أي رحلة تلقائيًا. قد يكون تخطيط موقع السعودية تغيّر —
+      الصورة محفوظة على الكمبيوتر في مجلد screenshots (${d.screenshot||''}). أرسلها للمطوّر لضبط القراءة.</div>`;
+  }
+  res.innerHTML=html;
+}
+
+refreshStatus();setInterval(refreshStatus,30000);
+</script>
+</body>
+</html>
