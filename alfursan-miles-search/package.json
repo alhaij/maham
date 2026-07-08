@@ -1,0 +1,17 @@
+{
+  "name": "alfursan-miles-search",
+  "version": "1.0.0",
+  "description": "Search Saudia Alfursan award (miles) flight availability by date and destination.",
+  "type": "module",
+  "bin": {
+    "alfursan-search": "search.js"
+  },
+  "scripts": {
+    "search": "node search.js",
+    "postinstall": "playwright install chromium"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "playwright": "^1.48.0"
+  }
+}
