@@ -17,7 +17,8 @@ const availHints = [/mile/i, /ميل/i, /point/i, /نقاط/i, /award/i, /است
 const soldOut = [/sold ?out|not available|unavailable|no seats|غير متاح|غير متوفر|نفد|لا توجد مقاعد/i];
 const cabins = { economy: /economy|guest|الاقتصادية|السياحية/i, business: /business|رجال ?الأعمال/i, first: /first|الأولى/i };
 const loginWall = /log ?in to (see|view|book)|sign in to|please log ?in|سجّل الدخول|تسجيل الدخول لعرض|يجب تسجيل الدخول/i;
-const botWall = /access denied|request blocked|are you a human|verify you are|captcha|unusual traffic|reference #\d/i;
+const botWall = /access denied|request unsuccessful|pardon our interruption|are you a human|unusual traffic|reference #\d{2}/i;
+function botMatch(html) { const m = html.match(botWall); if (m) { console.log('BOT-WALL matched:', JSON.stringify(html.slice(Math.max(0, m.index - 30), m.index + 70))); return true; } return false; }
 
 async function ntfy(title, body, tags = 'airplane', priority = 'default') {
   if (!TOPIC) { console.log('[ntfy] no NTFY_TOPIC — skipping push'); return; }
@@ -85,25 +86,52 @@ async function fillAuto(page, sel, value) {
 async function pickDate(page, dateStr) {
   const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const d = new Date(dateStr + 'T00:00:00');
-  const label = `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
-  const opener = await firstVisible(page, [
-    () => page.getByText(/^Depart|Departure|Select date|Departing/i),
-    () => page.locator('#mat-input-6'),
-    () => page.getByText('event'),
-  ]);
-  if (opener) { await opener.click().catch(() => {}); await page.waitForTimeout(800); }
+  const mon = months[d.getMonth()], day = d.getDate(), year = d.getFullYear();
+
+  const calShown = () => page.locator('.mat-calendar-body-cell, [role="gridcell"]').first().isVisible({ timeout: 1500 }).catch(() => false);
+
+  // Open the calendar if it isn't already.
+  if (!(await calShown())) {
+    const opener = await firstVisible(page, [
+      () => page.locator('#mat-input-6'),
+      () => page.locator('#mat-input-7'),
+      () => page.getByText('event').first(),
+      () => page.getByText(/^Departure$|^Depart$|Select date|Departing/i),
+    ]);
+    if (opener) { await opener.click().catch(() => {}); await page.waitForTimeout(1200); }
+  }
+  const open = await calShown();
+  console.log('calendar open:', open);
+
+  // Report the real cell/header format so we can see what Saudia uses.
+  try {
+    const info = await page.evaluate(() => {
+      const cells = [...document.querySelectorAll('.mat-calendar-body-cell, [role="gridcell"]')].slice(0, 10)
+        .map((e) => e.getAttribute('aria-label') || e.textContent.trim());
+      const hdr = document.querySelector('.mat-calendar-period-button, [class*="period-button"]');
+      return { header: hdr ? hdr.textContent.trim() : '', cells };
+    });
+    console.log('calendar header:', info.header, '| cells:', JSON.stringify(info.cells));
+  } catch (e) { console.log('cal dump failed:', e.message); }
+
+  // Navigate to the target month and click the day (several label formats).
   for (let i = 0; i < 24; i++) {
-    const cell = page.locator(`[aria-label="${label}"]`).first();
-    if (await cell.isVisible({ timeout: 800 }).catch(() => false)) {
+    const cell = await firstVisible(page, [
+      () => page.locator(`[aria-label="${mon} ${day}, ${year}"]`),
+      () => page.locator(`[aria-label*="${mon} ${day}"][aria-label*="${year}"]`),
+      () => page.locator(`[aria-label*="${day} ${mon} ${year}"]`),
+      () => page.getByRole('gridcell', { name: new RegExp(`(^|\\D)${day}(\\D|$)`) }).filter({ hasText: new RegExp(`^\\s*${day}\\s*$`) }),
+    ]);
+    if (cell) {
       await cell.click().catch(() => {});
-      console.log('picked date', label);
+      console.log(`picked date ${mon} ${day}, ${year}`);
       await page.waitForTimeout(500);
       return true;
     }
     const next = await firstVisible(page, [() => page.getByRole('button', { name: /next month/i }), () => page.getByText('Next month')]);
-    if (next) { await next.click().catch(() => {}); await page.waitForTimeout(300); } else break;
+    if (next) { await next.click().catch(() => {}); await page.waitForTimeout(400); } else break;
   }
-  console.log('could not pick date', label);
+  console.log('could not pick date', mon, day, year);
   return false;
 }
 
@@ -143,7 +171,7 @@ async function dumpResults(page) {
     console.log(`HTTP ${status}  final=${page.url()}`);
     await page.waitForTimeout(3500);
     const html = (await page.content().catch(() => '')).slice(0, 200000);
-    if (status >= 400 || botWall.test(html)) blocked = true;
+    if (status >= 400 || botMatch(html)) blocked = true;
     await dump(page, 'landing');
 
     if (reachable && !blocked) {
@@ -182,7 +210,12 @@ async function dumpResults(page) {
 
       const afterHtml = (await page.content().catch(() => '')).slice(0, 300000);
       if (loginWall.test(afterHtml)) needLogin = true;
-      if (botWall.test(afterHtml)) blocked = true;
+      if (botMatch(afterHtml)) blocked = true;
+      const resultsUrl = page.url();
+      const navigated = !/^https?:\/\/[^/]+\/?$/.test(resultsUrl);
+      console.log('post-search url:', resultsUrl, '| navigated to results page:', navigated);
+      const pwVisible = await page.locator('input[type="password"]:visible').first().isVisible({ timeout: 1000 }).catch(() => false);
+      if (pwVisible) console.log('note: a password field is visible after search (possible login prompt)');
       await dump(page, 'results');
       await dumpResults(page);
 
