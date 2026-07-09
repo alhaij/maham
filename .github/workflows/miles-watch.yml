@@ -1,0 +1,61 @@
+name: Alfursan Miles Watch
+
+# Runs on GitHub's own servers — not your Mac, not anyone's laptop.
+# - push/workflow_dispatch: run on demand (used to probe whether this is viable).
+# - schedule: an endless watcher, every 30 min. NOTE: scheduled runs only fire
+#   from the repository's DEFAULT branch, so the endless mode activates once this
+#   file is merged to `main`.
+on:
+  push:
+    branches: [ "claude/miles-booking-app-screen-oryfgz" ]
+    paths:
+      - "alfursan-app/watch-ci.js"
+      - ".github/workflows/miles-watch.yml"
+  workflow_dispatch:
+  schedule:
+    - cron: "*/30 * * * *"
+
+# ── Which flight to hunt (edit these) ──
+env:
+  WATCH_FROM: JED
+  WATCH_TO: DXB
+  WATCH_DATE: "2026-08-15"
+  WATCH_CABIN: economy
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        working-directory: alfursan-app
+        run: npm install
+
+      - name: Install Chromium
+        working-directory: alfursan-app
+        run: npx playwright install --with-deps chromium
+
+      - name: Run miles watcher / probe
+        working-directory: alfursan-app
+        env:
+          WATCH_FROM: ${{ env.WATCH_FROM }}
+          WATCH_TO: ${{ env.WATCH_TO }}
+          WATCH_DATE: ${{ env.WATCH_DATE }}
+          WATCH_CABIN: ${{ env.WATCH_CABIN }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          DIAG: "1"
+        run: node watch-ci.js
+
+      - name: Upload page screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: watch-screenshot
+          path: alfursan-app/watch-shot.png
+          if-no-files-found: ignore
