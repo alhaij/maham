@@ -61,6 +61,67 @@ async function dump(page, label) {
   } catch (e) { console.log(`[dump ${label}] failed:`, e.message); }
 }
 
+// Type into a Material autocomplete and pick the first suggestion.
+async function fillAuto(page, sel, value) {
+  const box = page.locator(sel);
+  if (!(await box.count().catch(() => 0))) { console.log('field missing:', sel); return false; }
+  await box.click().catch(() => {});
+  await box.fill('').catch(() => {});
+  await box.type(value, { delay: 130 });
+  await page.waitForTimeout(1800);
+  const opt = await firstVisible(page, [() => page.locator('mat-option'), () => page.locator('[role="option"]')]);
+  if (opt) {
+    const t = (await opt.innerText().catch(() => '')).replace(/\s+/g, ' ').trim();
+    await opt.click().catch(() => {});
+    console.log(`autocomplete ${value} -> "${t.slice(0, 50)}"`);
+    await page.waitForTimeout(500);
+    return true;
+  }
+  console.log(`no autocomplete option for ${value} in ${sel}`);
+  return false;
+}
+
+// Drive the Material datepicker: open it, page to the target month, click the day.
+async function pickDate(page, dateStr) {
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const d = new Date(dateStr + 'T00:00:00');
+  const label = `${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+  const opener = await firstVisible(page, [
+    () => page.getByText(/^Depart|Departure|Select date|Departing/i),
+    () => page.locator('#mat-input-6'),
+    () => page.getByText('event'),
+  ]);
+  if (opener) { await opener.click().catch(() => {}); await page.waitForTimeout(800); }
+  for (let i = 0; i < 24; i++) {
+    const cell = page.locator(`[aria-label="${label}"]`).first();
+    if (await cell.isVisible({ timeout: 800 }).catch(() => false)) {
+      await cell.click().catch(() => {});
+      console.log('picked date', label);
+      await page.waitForTimeout(500);
+      return true;
+    }
+    const next = await firstVisible(page, [() => page.getByRole('button', { name: /next month/i }), () => page.getByText('Next month')]);
+    if (next) { await next.click().catch(() => {}); await page.waitForTimeout(300); } else break;
+  }
+  console.log('could not pick date', label);
+  return false;
+}
+
+// On the results page, sample any price / miles / cabin text so we can learn
+// the card structure and see whether miles pricing shows without login.
+async function dumpResults(page) {
+  try {
+    const info = await page.evaluate(() => {
+      const leaf = [...document.querySelectorAll('*')].filter((e) => e.childElementCount === 0);
+      const txt = leaf.map((e) => (e.innerText || '').trim())
+        .filter((t) => t && t.length < 40 && /SAR|SR |miles|mile|ميل|نقاط|Economy|Business|First|\b\d{1,3},\d{3}\b|:\d\d/i.test(t));
+      return { url: location.href, samples: [...new Set(txt)].slice(0, 30) };
+    });
+    console.log('RESULTS url    :', info.url);
+    console.log('RESULTS samples:', JSON.stringify(info.samples));
+  } catch (e) { console.log('dumpResults failed:', e.message); }
+}
+
 (async () => {
   if (!FROM || !TO || !DATE) { console.error('Missing WATCH_FROM / WATCH_TO / WATCH_DATE'); process.exit(1); }
   console.log(`\n=== Alfursan miles probe: ${FROM} -> ${TO}  ${DATE}  ${CABIN} ===\n`);
@@ -86,51 +147,51 @@ async function dump(page, label) {
     await dump(page, 'landing');
 
     if (reachable && !blocked) {
-      // best-effort miles search
-      const miles = await firstVisible(page, [
-        () => page.getByRole('tab', { name: /pay with miles|redeem|الأميال|استبدال/i }),
-        () => page.getByRole('button', { name: /pay with miles|redeem|الأميال|استبدال/i }),
-        () => page.getByText(/pay with miles|redeem|الأميال|استبدال/i),
-      ]);
-      if (miles) { await miles.click().catch(() => {}); await page.waitForTimeout(1000); }
+      // Saudia = Angular Material booking widget (calibrated from the live DOM).
+      // 1) accept cookies if the banner is up
+      const cookie = await firstVisible(page, [() => page.getByRole('button', { name: /yes, i accept|accept all|accept|موافق/i })]);
+      if (cookie) { await cookie.click().catch(() => {}); await page.waitForTimeout(600); console.log('accepted cookies'); }
 
-      for (const [which, code] of [['from', FROM], ['to', TO]]) {
-        const lab = which === 'from' ? /from|origin|من|المغادرة/i : /to|destination|إلى|الوصول/i;
-        const box = await firstVisible(page, [
-          () => page.getByLabel(lab), () => page.getByPlaceholder(lab),
-          () => page.locator(`input[name*="${which}" i], input[id*="${which}" i]`),
-        ]);
-        if (box) {
-          await box.click().catch(() => {}); await box.fill('').catch(() => {});
-          await box.type(code, { delay: 100 }); await page.waitForTimeout(1200);
-          const opt = await firstVisible(page, [() => page.getByRole('option'), () => page.locator('[role="option"], li[class*="option" i]')]);
-          if (opt) await opt.click().catch(() => {}); else await page.keyboard.press('Enter').catch(() => {});
-        }
-      }
-      const dateBox = await firstVisible(page, [
-        () => page.getByLabel(/depart|date|التاريخ|المغادرة/i),
-        () => page.locator('input[name*="depart" i], input[id*="depart" i], input[type="date"]'),
-      ]);
-      if (dateBox) { await dateBox.click().catch(() => {}); await dateBox.fill(DATE).catch(() => {}); await page.keyboard.press('Escape').catch(() => {}); }
+      // 2) One way
+      const oneWay = await firstVisible(page, [() => page.getByText('One way', { exact: true }), () => page.getByRole('radio', { name: /one way/i })]);
+      if (oneWay) { await oneWay.click().catch(() => {}); await page.waitForTimeout(500); console.log('set One way'); }
 
+      // 3) Book with Miles
+      const miles = await firstVisible(page, [() => page.getByText('Book with Miles', { exact: true }), () => page.getByText(/book with miles/i)]);
+      if (miles) { await miles.click().catch(() => {}); await page.waitForTimeout(900); console.log('clicked Book with Miles'); }
+      else console.log('Book with Miles toggle not found');
+
+      // 4) From / To via Material autocomplete
+      await fillAuto(page, '#mat-input-4', FROM);
+      await fillAuto(page, '#mat-input-5', TO);
+
+      // 5) Departure date via the Material calendar
+      await pickDate(page, DATE);
+
+      // 6) Search Flights
       const go = await firstVisible(page, [
-        () => page.getByRole('button', { name: /search|find flights?|بحث|عرض/i }),
-        () => page.getByText(/search|find flights?|بحث|عرض/i),
+        () => page.getByRole('button', { name: /search flights/i }),
+        () => page.getByText(/Search Flights/i),
       ]);
-      if (go) { await go.click().catch(() => {}); }
-      await page.waitForLoadState('networkidle', { timeout: 45000 }).catch(() => {});
-      await page.waitForTimeout(3500);
+      if (go) { await go.click().catch(() => {}); console.log('clicked Search Flights'); }
+      else console.log('Search Flights button not found');
 
-      const afterHtml = (await page.content().catch(() => '')).slice(0, 200000);
+      await page.waitForTimeout(6000);
+      await page.waitForLoadState('networkidle', { timeout: 45000 }).catch(() => {});
+      await page.waitForTimeout(2500);
+
+      const afterHtml = (await page.content().catch(() => '')).slice(0, 300000);
       if (loginWall.test(afterHtml)) needLogin = true;
       if (botWall.test(afterHtml)) blocked = true;
-      await dump(page, 'after-search');
+      await dump(page, 'results');
+      await dumpResults(page);
 
-      const loc = page.locator('[class*="flight" i][class*="card" i], [data-testid*="flight" i], [class*="fare" i][class*="option" i], li[class*="flight" i]');
+      const loc = page.locator('[class*="flight" i], [class*="fare" i], [class*="result" i], [data-testid*="flight" i], mat-card, [class*="journey" i]');
       const n = await loc.count().catch(() => 0);
+      console.log('candidate result nodes:', n);
       for (let i = 0; i < Math.min(n, 40); i++) {
-        const t = (await loc.nth(i).innerText().catch(() => '')).trim();
-        if (t) cards.push(t);
+        const t = (await loc.nth(i).innerText().catch(() => '')).replace(/\s+\n/g, '\n').trim();
+        if (t && t.length > 8) cards.push(t);
       }
     }
   } catch (e) {
