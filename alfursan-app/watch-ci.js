@@ -36,6 +36,31 @@ async function firstVisible(page, builders) {
   return null;
 }
 
+// Report the live page structure to the logs so selectors can be calibrated
+// without seeing the screen (the artifact download is firewalled).
+async function dump(page, label) {
+  try {
+    const info = await page.evaluate(() => {
+      const vis = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+      const inputs = [...document.querySelectorAll('input,select')].filter(vis).slice(0, 40)
+        .map((e) => ({ tag: e.tagName, type: e.type || '', name: e.name || '', id: e.id || '', ph: e.placeholder || '', al: e.getAttribute('aria-label') || '' }));
+      const buttons = [...document.querySelectorAll('button,[role="button"],a')].filter(vis)
+        .map((e) => (e.innerText || e.getAttribute('aria-label') || '').trim()).filter((t) => t && t.length < 40).slice(0, 60);
+      const milesTxt = [...document.querySelectorAll('*')].filter(vis)
+        .map((e) => (e.innerText || '').trim()).filter((t) => /mile|redeem|الأميال|استبدال/i.test(t) && t.length < 60).slice(0, 8);
+      return { title: document.title, url: location.href, iframes: document.querySelectorAll('iframe').length, inputs, buttons: [...new Set(buttons)], milesTxt: [...new Set(milesTxt)] };
+    });
+    console.log(`\n===== DOM DUMP [${label}] =====`);
+    console.log('title  :', info.title);
+    console.log('url    :', info.url);
+    console.log('iframes:', info.iframes);
+    console.log('inputs :', JSON.stringify(info.inputs));
+    console.log('buttons:', JSON.stringify(info.buttons));
+    console.log('milesTx:', JSON.stringify(info.milesTxt));
+    console.log('================================\n');
+  } catch (e) { console.log(`[dump ${label}] failed:`, e.message); }
+}
+
 (async () => {
   if (!FROM || !TO || !DATE) { console.error('Missing WATCH_FROM / WATCH_TO / WATCH_DATE'); process.exit(1); }
   console.log(`\n=== Alfursan miles probe: ${FROM} -> ${TO}  ${DATE}  ${CABIN} ===\n`);
@@ -58,6 +83,7 @@ async function firstVisible(page, builders) {
     await page.waitForTimeout(3500);
     const html = (await page.content().catch(() => '')).slice(0, 200000);
     if (status >= 400 || botWall.test(html)) blocked = true;
+    await dump(page, 'landing');
 
     if (reachable && !blocked) {
       // best-effort miles search
@@ -98,6 +124,7 @@ async function firstVisible(page, builders) {
       const afterHtml = (await page.content().catch(() => '')).slice(0, 200000);
       if (loginWall.test(afterHtml)) needLogin = true;
       if (botWall.test(afterHtml)) blocked = true;
+      await dump(page, 'after-search');
 
       const loc = page.locator('[class*="flight" i][class*="card" i], [data-testid*="flight" i], [class*="fare" i][class*="option" i], li[class*="flight" i]');
       const n = await loc.count().catch(() => 0);
