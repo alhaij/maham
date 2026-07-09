@@ -113,26 +113,68 @@ export async function login() {
   return { loggedIn, note: loggedIn ? 'logged in' : 'finish login in the browser window on the computer running this server (CAPTCHA/OTP)' };
 }
 
+// Saudia's booking widget is Angular Material (calibrated from the live DOM):
+// From = #mat-input-4, To = #mat-input-5, suggestions are <mat-option>.
 async function fillCity(which, code) {
-  const labels = which === 'from'
-    ? /from|origin|departing|leaving|من|المغادرة/i
-    : /to|destination|arriving|going|إلى|الوصول/i;
+  const sel = which === 'from' ? '#mat-input-4' : '#mat-input-5';
+  const labels = which === 'from' ? /from|origin|من|المغادرة/i : /to|destination|إلى|الوصول/i;
   const box = await firstVisible(_page, [
-    () => _page.getByLabel(labels),
+    () => _page.locator(sel),
     () => _page.getByPlaceholder(labels),
+    () => _page.getByLabel(labels),
     () => _page.locator(`input[name*="${which}" i], input[id*="${which}" i]`),
   ]);
   if (!box) { await shot(`no-${which}`); return false; }
   await box.click().catch(() => {});
   await box.fill('').catch(() => {});
-  await box.type(code, { delay: 110 });
-  await _page.waitForTimeout(1400);
+  await box.type(code, { delay: 120 });
+  await _page.waitForTimeout(1600);
   const opt = await firstVisible(_page, [
+    () => _page.locator('mat-option'),
     () => _page.getByRole('option'),
-    () => _page.locator('[role="option"], li[class*="option" i], .autocomplete-suggestion'),
+    () => _page.locator('[role="option"], li[class*="option" i]'),
   ]);
   if (opt) await opt.click().catch(() => {}); else await _page.keyboard.press('Enter').catch(() => {});
+  await _page.waitForTimeout(400);
   return true;
+}
+
+// Material / Saudia fare calendar: open it, page to the month, click the day.
+// Saudia's day cells render as "15\n621" (day + fare), so we also match by the
+// leading day number when the standard aria-label isn't present.
+async function pickDate(date) {
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const d = new Date(date + 'T00:00:00');
+  const mon = months[d.getMonth()], day = d.getDate(), year = d.getFullYear();
+  const calShown = () => _page.locator('.mat-calendar-body-cell, [role="gridcell"]').first().isVisible({ timeout: 1200 }).catch(() => false);
+
+  if (!(await calShown())) {
+    const opener = await firstVisible(_page, [
+      () => _page.locator('#mat-input-6'),
+      () => _page.getByText('event').first(),
+      () => _page.getByText(/^Depart|Departure|Select date|Departing/i),
+    ]);
+    if (opener) { await opener.click().catch(() => {}); await _page.waitForTimeout(1000); }
+  }
+
+  for (let i = 0; i < 18; i++) {
+    let cell = await firstVisible(_page, [
+      () => _page.locator(`[aria-label="${mon} ${day}, ${year}"]`),
+      () => _page.locator(`[aria-label*="${mon} ${day}"][aria-label*="${year}"]`),
+    ]);
+    if (!cell) {
+      const cells = _page.locator('.mat-calendar-body-cell, [role="gridcell"], button');
+      const cnt = await cells.count().catch(() => 0);
+      for (let j = 0; j < Math.min(cnt, 400); j++) {
+        const t = (await cells.nth(j).innerText().catch(() => '')).trim();
+        if (t.split(/[\s\n]+/)[0] === String(day) && await cells.nth(j).isVisible().catch(() => false)) { cell = cells.nth(j); break; }
+      }
+    }
+    if (cell) { await cell.click().catch(() => {}); await _page.waitForTimeout(500); return true; }
+    const next = await firstVisible(_page, [() => _page.getByRole('button', { name: /next month/i }), () => _page.getByText('Next month')]);
+    if (next) { await next.click().catch(() => {}); await _page.waitForTimeout(400); } else break;
+  }
+  return false;
 }
 
 async function pickCabin(cabin) {
@@ -174,37 +216,39 @@ export async function search(params) {
       return { ok: false, needLogin: true, error: 'Not logged into Alfursan yet. Log in once on the computer, then retry.' };
     }
 
-    // switch to miles mode
+    // accept the cookie banner if present
+    const cookie = await firstVisible(_page, [() => _page.getByRole('button', { name: /yes, i accept|accept all|accept|موافق/i })]);
+    if (cookie) { await cookie.click().catch(() => {}); await _page.waitForTimeout(500); }
+
+    // trip type
+    if (!ret) {
+      const oneWay = await firstVisible(_page, [() => _page.getByText('One way', { exact: true }), () => _page.getByRole('radio', { name: /one way/i })]);
+      if (oneWay) { await oneWay.click().catch(() => {}); await _page.waitForTimeout(400); }
+    }
+
+    // switch to "Book with Miles" (logged in, this shows award / miles pricing)
     const miles = await firstVisible(_page, [
-      () => _page.getByRole('tab', { name: CFG.milesToggle[0] }),
+      () => _page.getByText('Book with Miles', { exact: true }),
+      () => _page.getByText(/book with miles/i),
       () => _page.getByRole('button', { name: CFG.milesToggle[0] }),
       () => _page.getByText(CFG.milesToggle[0]),
-      () => _page.getByText(CFG.milesToggle[1]),
     ]);
     if (miles) { await miles.click().catch(() => {}); await _page.waitForTimeout(900); }
 
     const okFrom = await fillCity('from', from);
     const okTo = await fillCity('to', to);
 
-    const dateBox = await firstVisible(_page, [
-      () => _page.getByLabel(/depart|date|going|التاريخ|المغادرة/i),
-      () => _page.getByPlaceholder(/depart|date|going|التاريخ/i),
-      () => _page.locator('input[name*="depart" i], input[id*="depart" i], input[type="date"]'),
-    ]);
-    if (dateBox) {
-      await dateBox.click().catch(() => {});
-      await dateBox.fill(date).catch(async () => { await _page.keyboard.type(date).catch(() => {}); });
-      await _page.keyboard.press('Escape').catch(() => {});
-    }
-
+    const okDate = await pickDate(date);
     await pickCabin(cabin);
 
-    const go = await firstVisible(_page,
-      CFG.searchBtn.map((re) => () => _page.getByRole('button', { name: re }))
-        .concat(CFG.searchBtn.map((re) => () => _page.getByText(re))));
+    const go = await firstVisible(_page, [
+      () => _page.getByRole('button', { name: /search flights/i }),
+      () => _page.getByText(/Search Flights/i),
+      ...CFG.searchBtn.map((re) => () => _page.getByRole('button', { name: re })),
+    ]);
     if (go) await go.click().catch(() => {});
     await _page.waitForLoadState('networkidle', { timeout: CFG.timeout }).catch(() => {});
-    await _page.waitForTimeout(3500);
+    await _page.waitForTimeout(4000);
 
     const cardsLoc = _page.locator(
       '[class*="flight" i][class*="card" i], [data-testid*="flight" i], [class*="fare" i][class*="option" i], li[class*="flight" i]'
@@ -220,7 +264,8 @@ export async function search(params) {
     return {
       ok: true, available, cabin, from, to, date, ret, adults,
       count: cards.length, flights: cards, matches,
-      calibrated: okFrom && okTo && cards.length > 0,
+      filled: { from: okFrom, to: okTo, date: okDate },
+      calibrated: okFrom && okTo && okDate && cards.length > 0,
       screenshot: path.basename(shotFile),
     };
   } catch (e) {
