@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
+    "chrome": "open -na 'Google Chrome' --args --remote-debugging-port=9222 --user-data-dir=\"$HOME/chrome-alfursan\"",
     "login": "node -e \"import('./automation.js').then(a=>a.login()).then(r=>{console.log(r);process.exit(0)})\"",
     "postinstall": "playwright install chromium"
   },

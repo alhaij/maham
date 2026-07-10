@@ -34,12 +34,28 @@ let _loggedIn = false; // sticky: once logged in, stay logged in (no re-login lo
 
 fs.mkdirSync(CFG.shotDir, { recursive: true });
 
+let _attached = false;  // true when connected to the user's own Chrome (don't close it)
+
 async function ctx() {
   if (_ctx) return _ctx;
   const { chromium } = await import('playwright');
-  // Anti-detection: drive the REAL Google Chrome (genuine fingerprint), hide the
-  // automation flags, and remove navigator.webdriver — so Saudia doesn't flag
-  // the session as a bot and log the user straight back out.
+
+  // BEST anti-detection: ATTACH to the Chrome the USER launched themselves
+  // (with --remote-debugging-port). They log into Saudia by hand in it, so the
+  // browser is 100% genuine and Saudia can't tell it's being driven.
+  const cdp = process.env.CDP_URL || 'http://127.0.0.1:9222';
+  try {
+    const browser = await chromium.connectOverCDP(cdp, { timeout: 3000 });
+    _ctx = browser.contexts()[0] || (await browser.newContext());
+    const pages = _ctx.pages();
+    _page = pages.find((p) => /saudia\.com/i.test(p.url())) || pages[0] || (await _ctx.newPage());
+    _page.setDefaultTimeout(CFG.timeout);
+    _attached = true;
+    console.log('  ✓ attached to your own Chrome (most reliable)');
+    return _ctx;
+  } catch { /* no debug Chrome running — fall back to launching one */ }
+
+  // Fallback: launch a controlled browser (real Chrome if present).
   const opts = {
     headless: CFG.headless,
     viewport: { width: 1360, height: 900 },
@@ -300,4 +316,4 @@ export async function search(params) {
   }
 }
 
-export async function shutdown() { try { await _ctx?.close(); } catch {} _ctx = null; _page = null; }
+export async function shutdown() { try { if (!_attached) await _ctx?.close(); } catch {} _ctx = null; _page = null; }
