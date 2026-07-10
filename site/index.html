@@ -1,0 +1,483 @@
+<title>أميال الفرسان — بحث رحلات بالأميال</title>
+<style>
+  :root{
+    --bg:#eef3ef; --panel:#ffffff; --panel-2:#f5f8f5;
+    --ink:#0f3527; --muted:#5f7268; --line:#dbe6df;
+    --green:#0a6b4a; --green-deep:#064c34; --gold:#a9812a; --gold-soft:#f2e7c9;
+    --danger:#b5564a; --shadow:0 6px 24px rgba(6,50,36,.10);
+    --radius:16px;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#06231a; --panel:#0e3628; --panel-2:#0a2c20;
+      --ink:#eaf3ee; --muted:#93ab9f; --line:#1c4a39;
+      --green:#2ea37a; --green-deep:#0f2e22; --gold:#d6b25c; --gold-soft:#2a3a2c;
+      --shadow:0 8px 30px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#06231a; --panel:#0e3628; --panel-2:#0a2c20;
+    --ink:#eaf3ee; --muted:#93ab9f; --line:#1c4a39;
+    --green:#2ea37a; --green-deep:#0f2e22; --gold:#d6b25c; --gold-soft:#2a3a2c;
+    --shadow:0 8px 30px rgba(0,0,0,.35);
+  }
+  :root[data-theme="light"]{
+    --bg:#eef3ef; --panel:#ffffff; --panel-2:#f5f8f5;
+    --ink:#0f3527; --muted:#5f7268; --line:#dbe6df;
+    --green:#0a6b4a; --green-deep:#064c34; --gold:#a9812a; --gold-soft:#f2e7c9;
+    --shadow:0 6px 24px rgba(6,50,36,.10);
+  }
+
+  *{box-sizing:border-box}
+  .wrap{
+    direction:rtl;
+    font-family:"SF Arabic","SF Pro Text","Segoe UI",Tahoma,"Helvetica Neue",Arial,sans-serif;
+    background:
+      radial-gradient(120% 60% at 85% -10%, color-mix(in srgb,var(--green) 16%, transparent), transparent 60%),
+      var(--bg);
+    color:var(--ink);
+    min-height:100vh;
+    padding:18px 16px 40px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .shell{max-width:460px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+
+  /* Header */
+  .head{display:flex;align-items:center;gap:12px;padding:2px 2px 0}
+  .mark{
+    width:46px;height:46px;border-radius:13px;flex:0 0 auto;
+    background:linear-gradient(150deg,var(--green),var(--green-deep));
+    display:grid;place-items:center;color:#fff;font-size:22px;
+    box-shadow:0 4px 14px color-mix(in srgb,var(--green) 40%,transparent);
+  }
+  .head h1{margin:0;font-size:20px;font-weight:800;letter-spacing:-.2px}
+  .head p{margin:2px 0 0;font-size:12.5px;color:var(--muted)}
+
+  /* Card */
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px}
+
+  .seg{display:flex;background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:4px;gap:4px;margin-bottom:14px}
+  .seg button{flex:1;border:none;background:transparent;color:var(--muted);font-family:inherit;font-size:13.5px;font-weight:700;padding:9px;border-radius:9px;cursor:pointer;transition:.15s}
+  .seg button[aria-pressed="true"]{background:var(--panel);color:var(--ink);box-shadow:0 1px 4px rgba(0,0,0,.08)}
+
+  .route{position:relative;display:grid;grid-template-columns:1fr;gap:10px}
+  .field{display:flex;flex-direction:column;gap:6px}
+  .field[hidden]{display:none}
+  .field label{font-size:11.5px;font-weight:700;color:var(--muted);letter-spacing:.3px;padding-inline-start:2px}
+  .field .ctrl{display:flex;align-items:center;gap:10px;background:var(--panel-2);border:1px solid var(--line);border-radius:12px;padding:11px 13px}
+  .field .ctrl:focus-within{border-color:var(--green);box-shadow:0 0 0 3px color-mix(in srgb,var(--green) 18%,transparent)}
+  .field .ico{font-size:16px;color:var(--green);flex:0 0 auto}
+  .field input,.field select{border:none;background:transparent;color:var(--ink);font-family:inherit;font-size:16px;font-weight:600;width:100%;outline:none}
+  .field input::placeholder{color:var(--muted);font-weight:500}
+  .field .hint{font-size:11px;color:var(--muted);padding-inline-start:2px;min-height:13px}
+
+  .swap{
+    position:absolute;inset-inline-end:14px;top:calc(50% - 18px);z-index:2;
+    width:38px;height:38px;border-radius:50%;border:1px solid var(--line);
+    background:var(--panel);color:var(--green);font-size:17px;cursor:pointer;box-shadow:var(--shadow);
+    display:grid;place-items:center;transition:transform .2s
+  }
+  .swap:active{transform:rotate(180deg)}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+  .stepper{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .stepper button{width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:var(--panel);color:var(--ink);font-size:19px;font-weight:700;cursor:pointer;line-height:1}
+  .stepper .n{font-size:17px;font-weight:800;font-variant-numeric:tabular-nums;min-width:22px;text-align:center}
+
+  .miles-note{display:flex;gap:9px;align-items:flex-start;margin-top:14px;background:var(--gold-soft);border:1px solid color-mix(in srgb,var(--gold) 40%,var(--line));border-radius:12px;padding:10px 12px}
+  .miles-note b{color:var(--gold)}
+  .miles-note span{font-size:12.5px;line-height:1.5;color:var(--ink)}
+
+  .cta{
+    margin-top:14px;width:100%;border:none;cursor:pointer;
+    background:linear-gradient(150deg,var(--green),var(--green-deep));color:#fff;
+    font-family:inherit;font-size:16px;font-weight:800;letter-spacing:.2px;
+    padding:15px;border-radius:13px;display:flex;align-items:center;justify-content:center;gap:9px;
+    box-shadow:0 6px 18px color-mix(in srgb,var(--green) 38%,transparent);transition:transform .1s,filter .15s
+  }
+  .cta:active{transform:scale(.985)}
+  .cta:disabled{filter:grayscale(.5) brightness(.9);cursor:not-allowed;box-shadow:none}
+  .ghost{margin-top:9px;width:100%;background:transparent;border:1px solid var(--line);color:var(--muted);font-family:inherit;font-size:13px;font-weight:600;padding:10px;border-radius:11px;cursor:pointer}
+
+  .summary{display:none;margin-top:12px;background:var(--panel-2);border:1px dashed var(--green);border-radius:12px;padding:12px 13px}
+  .summary.on{display:block;animation:rise .25s ease}
+  @keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .summary .big{font-size:19px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:.3px}
+  .summary .sub{font-size:12.5px;color:var(--muted);margin-top:4px}
+
+  .recent h2{font-size:13px;font-weight:800;color:var(--muted);margin:2px 2px 10px;letter-spacing:.3px}
+  .rlist{display:flex;flex-direction:column;gap:8px}
+  .ritem{display:flex;align-items:center;gap:11px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:11px 13px;cursor:pointer;transition:.15s}
+  .ritem:active{background:var(--panel-2)}
+  .ritem .pair{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:.4px}
+  .ritem .meta{font-size:11.5px;color:var(--muted);margin-top:2px}
+  .ritem .go{margin-inline-start:auto;color:var(--green);font-size:15px}
+  .ritem .del{border:none;background:transparent;color:var(--muted);font-size:19px;cursor:pointer;line-height:1;padding:0 2px}
+  .empty{font-size:12.5px;color:var(--muted);text-align:center;padding:14px}
+
+  /* cabin badge */
+  .badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:800;padding:3px 9px;border-radius:999px;letter-spacing:.2px}
+  .badge::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+  .badge.eco{color:var(--green);background:color-mix(in srgb,var(--green) 15%,transparent)}
+  .badge.biz{color:var(--gold);background:color-mix(in srgb,var(--gold) 18%,transparent)}
+  .badge.first{color:#8a6bd8;background:color-mix(in srgb,#8a6bd8 16%,transparent)}
+
+  /* watch section */
+  .wh-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+  .wh-head h2{font-size:15px;font-weight:800;margin:0}
+  .bell{margin-inline-start:auto;display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--panel-2);color:var(--muted);font-family:inherit;font-size:12px;font-weight:700;padding:7px 12px;border-radius:999px;cursor:pointer;transition:.15s}
+  .bell.on{border-color:var(--green);color:var(--green);background:color-mix(in srgb,var(--green) 12%,transparent)}
+  .witem{display:flex;align-items:center;gap:11px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:11px 13px}
+  .witem .body{min-width:0}
+  .witem .pair{font-size:15px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:.4px}
+  .witem .meta{font-size:11.5px;color:var(--muted);margin-top:3px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .witem .chk{margin-inline-start:auto;border:none;background:var(--green);color:#fff;font-family:inherit;font-size:12.5px;font-weight:800;padding:8px 13px;border-radius:10px;cursor:pointer;white-space:nowrap}
+  .witem .del{border:none;background:transparent;color:var(--muted);font-size:19px;cursor:pointer;line-height:1;padding:0 2px}
+  .mini{font-size:11px;color:var(--muted);line-height:1.6;margin:11px 2px 0;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:9px 11px}
+  .mini b{color:var(--gold)}
+
+  .foot{font-size:11.5px;color:var(--muted);line-height:1.7;text-align:center;padding:4px 8px}
+  .toast{position:fixed;inset-inline:0;bottom:22px;margin:0 auto;width:max-content;max-width:88%;background:var(--green-deep);color:#fff;font-size:13px;font-weight:600;padding:11px 18px;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.3);opacity:0;transform:translateY(12px);transition:.25s;pointer-events:none;z-index:9}
+  .toast.on{opacity:1;transform:none}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<main class="wrap">
+  <div class="shell">
+
+    <header class="head">
+      <div class="mark">✈</div>
+      <div>
+        <h1>أميال الفرسان</h1>
+        <p>ابحث عن رحلة تحجزها بأميالك — بدون كاش</p>
+      </div>
+    </header>
+
+    <section class="card">
+      <div class="seg" role="group" aria-label="نوع الرحلة">
+        <button id="tOne" aria-pressed="true">ذهاب فقط</button>
+        <button id="tRound" aria-pressed="false">ذهاب وعودة</button>
+      </div>
+
+      <div class="route">
+        <div class="field">
+          <label for="from">من</label>
+          <div class="ctrl"><span class="ico">🛫</span>
+            <input id="from" list="airports" placeholder="مثال: جدة — JED" autocomplete="off" inputmode="text" />
+          </div>
+          <div class="hint" id="fromHint"></div>
+        </div>
+
+        <button class="swap" id="swap" title="تبديل" aria-label="تبديل المدينتين">⇅</button>
+
+        <div class="field">
+          <label for="to">إلى</label>
+          <div class="ctrl"><span class="ico">🛬</span>
+            <input id="to" list="airports" placeholder="مثال: دبي — DXB" autocomplete="off" inputmode="text" />
+          </div>
+          <div class="hint" id="toHint"></div>
+        </div>
+      </div>
+
+      <div class="grid2" style="margin-top:12px">
+        <div class="field">
+          <label for="dep">تاريخ الذهاب</label>
+          <div class="ctrl"><span class="ico">📅</span>
+            <input id="dep" type="date" />
+          </div>
+        </div>
+        <div class="field" id="retWrap" hidden>
+          <label for="ret">تاريخ العودة</label>
+          <div class="ctrl"><span class="ico">📅</span>
+            <input id="ret" type="date" />
+          </div>
+        </div>
+      </div>
+
+      <div class="grid2" style="margin-top:12px">
+        <div class="field">
+          <label>المسافرون</label>
+          <div class="ctrl stepper">
+            <button id="paxMinus" aria-label="أقل">−</button>
+            <span class="n" id="paxN">1</span>
+            <button id="paxPlus" aria-label="أكثر">+</button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="cabin">الدرجة</label>
+          <div class="ctrl"><span class="ico">💺</span>
+            <select id="cabin">
+              <option value="economy">الاقتصادية</option>
+              <option value="business">رجال الأعمال</option>
+              <option value="first">الأولى</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="miles-note">
+        <b>★</b>
+        <span>بعد فتح موقع السعودية، اختر <b>«الدفع بالأميال / Pay with miles»</b> ثم الصق تفاصيل رحلتك. هذي الخطوة تسوّيها بنفسك — ما أقدر أعبّي حسابك بالنيابة عنك.</span>
+      </div>
+
+      <button class="cta" id="go">افتح السعودية بالأميال ←</button>
+      <button class="ghost" id="mkAlert">🔔 أنشئ تنبيه لهذي الرحلة والدرجة</button>
+      <button class="ghost" id="copy">انسخ تفاصيل الرحلة</button>
+
+      <div class="summary" id="summary" aria-live="polite">
+        <div class="big" id="sumBig"></div>
+        <div class="sub" id="sumSub"></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="wh-head">
+        <h2>تنبيهاتي للمقاعد</h2>
+        <button class="bell" id="bell">🔔 فعّل التذكير</button>
+      </div>
+      <div class="rlist" id="wlist"></div>
+      <p class="mini">
+        هذه القائمة تحفظ رحلاتك حسب <b>الدرجة</b> وتذكّرك تتحقق (والتذكير يشتغل والصفحة مفتوحة).
+        للتنبيه <b>الحيّ التلقائي</b> — يطنّ لك أول ما تنزل مقاعد بالأميال حتى والجوّال مقفول —
+        شغّل أداة <b>search.js --watch</b> على الكمبيوتر مع تليجرام، وتوصلك الرسالة على جوّالك.
+      </p>
+    </section>
+
+    <section class="recent">
+      <h2>عمليات البحث الأخيرة</h2>
+      <div class="rlist" id="rlist"></div>
+    </section>
+
+    <p class="foot">
+      هذه صفحة مساعدة تفتح موقع السعودية مباشرة حيث تكمل الحجز بأميالك.<br>
+      لا تُخزَّن بياناتك إلا على جهازك، وتعمل بدون إنترنت بعد فتحها.
+    </p>
+  </div>
+</main>
+
+<datalist id="airports">
+  <option value="JED — جدة"></option><option value="RUH — الرياض"></option>
+  <option value="DMM — الدمام"></option><option value="MED — المدينة المنورة"></option>
+  <option value="DXB — دبي"></option><option value="AUH — أبوظبي"></option>
+  <option value="DOH — الدوحة"></option><option value="BAH — البحرين"></option>
+  <option value="KWI — الكويت"></option><option value="MCT — مسقط"></option>
+  <option value="CAI — القاهرة"></option><option value="AMM — عمّان"></option>
+  <option value="BEY — بيروت"></option><option value="IST — إسطنبول"></option>
+  <option value="LHR — لندن"></option><option value="MAN — مانشستر"></option>
+  <option value="CDG — باريس"></option><option value="FRA — فرانكفورت"></option>
+  <option value="GVA — جنيف"></option><option value="MAD — مدريد"></option>
+  <option value="JFK — نيويورك"></option><option value="IAD — واشنطن"></option>
+  <option value="LAX — لوس أنجلوس"></option><option value="KUL — كوالالمبور"></option>
+  <option value="BKK — بانكوك"></option><option value="DEL — دلهي"></option>
+  <option value="BOM — مومباي"></option><option value="KHI — كراتشي"></option>
+  <option value="LHE — لاهور"></option><option value="ISB — إسلام آباد"></option>
+  <option value="JAK — جاكرتا"></option><option value="MNL — مانيلا"></option>
+</datalist>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  const $=s=>document.querySelector(s);
+  const SAUDIA="https://www.saudia.com/";
+  const KEY="alfursan_recent_v1";
+  const MONTHS=["يناير","فبراير","مارس","أبريل","مايو","يونيو","يوليو","أغسطس","سبتمبر","أكتوبر","نوفمبر","ديسمبر"];
+  const CABINS={economy:"الاقتصادية",business:"رجال الأعمال",first:"الأولى"};
+
+  let round=false, pax=1;
+
+  // default departure = today (min today)
+  const today=new Date(); const iso=d=>d.toISOString().slice(0,10);
+  $("#dep").min=iso(today); $("#ret").min=iso(today);
+
+  // trip type
+  function setRound(r){
+    round=r;
+    $("#tOne").setAttribute("aria-pressed",String(!r));
+    $("#tRound").setAttribute("aria-pressed",String(r));
+    $("#retWrap").hidden=!r;
+  }
+  $("#tOne").onclick=()=>setRound(false);
+  $("#tRound").onclick=()=>setRound(true);
+
+  // passengers
+  const paxN=$("#paxN");
+  $("#paxPlus").onclick=()=>{pax=Math.min(9,pax+1);paxN.textContent=pax;};
+  $("#paxMinus").onclick=()=>{pax=Math.max(1,pax-1);paxN.textContent=pax;};
+
+  // swap
+  $("#swap").onclick=()=>{const f=$("#from").value;$("#from").value=$("#to").value;$("#to").value=f;validate();};
+
+  // parse "JED — جدة" or "jed" -> code
+  function code(v){
+    if(!v) return "";
+    const m=v.trim().match(/[A-Za-z]{3}/);
+    return m?m[0].toUpperCase():"";
+  }
+  function label(v){
+    const c=code(v); if(!c) return "";
+    const opt=[...document.querySelectorAll("#airports option")].find(o=>o.value.startsWith(c));
+    return opt?opt.value:c;
+  }
+  function fmtDate(s){
+    if(!s) return "";
+    const d=new Date(s+"T00:00:00");
+    return d.getDate()+" "+MONTHS[d.getMonth()]+" "+d.getFullYear();
+  }
+
+  function hint(id,v){$(id).textContent = code(v)? "المطار: "+label(v):"";}
+  $("#from").addEventListener("input",e=>{hint("#fromHint",e.target.value);validate();});
+  $("#to").addEventListener("input",e=>{hint("#toHint",e.target.value);validate();});
+  $("#dep").addEventListener("input",validate);
+
+  function current(){
+    return {from:code($("#from").value),to:code($("#to").value),dep:$("#dep").value,
+            ret:round?$("#ret").value:"",round,pax,cabin:$("#cabin").value};
+  }
+  function validate(){
+    const c=current();
+    const ok=c.from.length===3 && c.to.length===3 && c.from!==c.to && !!c.dep;
+    $("#go").disabled=!ok;
+    return ok;
+  }
+
+  function toast(msg){const t=$("#toast");t.textContent=msg;t.classList.add("on");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("on"),2600);}
+
+  function summaryText(c){
+    let s=c.from+" ← "+c.to;
+    let sub=fmtDate(c.dep)+(c.round&&c.ret?" ← "+fmtDate(c.ret):"")+" · "+c.pax+" مسافر · "+CABINS[c.cabin]+" · بالأميال";
+    return {s,sub};
+  }
+  function showSummary(c){
+    const {s,sub}=summaryText(c);
+    $("#sumBig").textContent=s; $("#sumSub").textContent=sub;
+    $("#summary").classList.add("on");
+  }
+  function plainSummary(c){
+    const {s,sub}=summaryText(c);
+    return "رحلة بالأميال: "+s+"\n"+sub;
+  }
+
+  // recent (localStorage)
+  function load(){try{return JSON.parse(localStorage.getItem(KEY))||[]}catch{return[]}}
+  function save(list){try{localStorage.setItem(KEY,JSON.stringify(list.slice(0,6)))}catch{}}
+  function remember(c){
+    const list=load().filter(x=>!(x.from===c.from&&x.to===c.to&&x.dep===c.dep));
+    list.unshift(c); save(list); render();
+  }
+  function render(){
+    const list=load(), el=$("#rlist");
+    if(!list.length){el.innerHTML='<div class="empty">ما فيه عمليات بحث بعد — سوِّ أول بحث ✈</div>';return;}
+    el.innerHTML="";
+    list.forEach((c,i)=>{
+      const {sub}=summaryText(c);
+      const row=document.createElement("div"); row.className="ritem";
+      row.innerHTML=`<div><div class="pair">${c.from} ← ${c.to}</div><div class="meta">${sub}</div></div>
+        <span class="go">↺</span><button class="del" aria-label="حذف">×</button>`;
+      row.querySelector(".del").onclick=e=>{e.stopPropagation();const l=load();l.splice(i,1);save(l);render();};
+      row.onclick=()=>{fill(c);toast("رجّعنا لك بحثك — اضغط افتح السعودية");window.scrollTo({top:0,behavior:"smooth"});};
+      el.appendChild(row);
+    });
+  }
+  function fill(c){
+    $("#from").value=label(c.from); $("#to").value=label(c.to);
+    $("#dep").value=c.dep; setRound(!!c.round);
+    if(c.ret){$("#ret").value=c.ret;}
+    pax=c.pax||1; paxN.textContent=pax; $("#cabin").value=c.cabin||"economy";
+    hint("#fromHint",$("#from").value); hint("#toHint",$("#to").value); validate();
+  }
+
+  // actions
+  $("#go").onclick=()=>{
+    if(!validate()){toast("أكمل: من، إلى، وتاريخ الذهاب");return;}
+    const c=current(); remember(c); showSummary(c);
+    try{navigator.clipboard&&navigator.clipboard.writeText(plainSummary(c));}catch{}
+    toast("فُتح موقع السعودية — اختر «الأميال» والصق التفاصيل");
+    window.open(SAUDIA,"_blank","noopener");
+  };
+  $("#copy").onclick=async()=>{
+    if(!validate()){toast("أكمل بيانات الرحلة أولاً");return;}
+    const c=current();
+    try{await navigator.clipboard.writeText(plainSummary(c));toast("اننسخت تفاصيل الرحلة ✓");showSummary(c);}
+    catch{toast("تعذّر النسخ — انسخها من الملخص");showSummary(c);}
+  };
+
+  /* ===== seat alerts / watchlist (by cabin) ===== */
+  const WKEY="alfursan_watch_v1";
+  const BADGE={economy:["eco","اقتصادية"],business:["biz","رجال أعمال"],first:["first","الأولى"]};
+  function cabinBadge(c){const [cls,txt]=BADGE[c]||BADGE.economy;return `<span class="badge ${cls}">${txt}</span>`;}
+  function loadW(){try{return JSON.parse(localStorage.getItem(WKEY))||[]}catch{return[]}}
+  function saveW(l){try{localStorage.setItem(WKEY,JSON.stringify(l.slice(0,12)))}catch{}}
+
+  function renderW(){
+    const list=loadW(), el=$("#wlist");
+    if(!list.length){el.innerHTML='<div class="empty">ما فيه تنبيهات — عبّي رحلة واضغط «أنشئ تنبيه» 🔔</div>';return;}
+    el.innerHTML="";
+    list.forEach((c,i)=>{
+      const row=document.createElement("div"); row.className="witem";
+      row.innerHTML=`<div class="body">
+          <div class="pair">${c.from} ← ${c.to}</div>
+          <div class="meta">${cabinBadge(c.cabin)} <span>${fmtDate(c.dep)}${c.round&&c.ret?" ← "+fmtDate(c.ret):""}</span> <span>· ${c.pax} مسافر</span></div>
+        </div>
+        <button class="chk">تحقق الآن</button>
+        <button class="del" aria-label="حذف">×</button>`;
+      row.querySelector(".chk").onclick=()=>{
+        remember(c); showSummary(c);
+        try{navigator.clipboard&&navigator.clipboard.writeText(plainSummary(c));}catch{}
+        toast("فُتح موقع السعودية — اختر «الأميال» و"+CABINS[c.cabin]);
+        window.open(SAUDIA,"_blank","noopener");
+      };
+      row.querySelector(".del").onclick=()=>{const l=loadW();l.splice(i,1);saveW(l);renderW();};
+      el.appendChild(row);
+    });
+  }
+
+  function addWatch(c){
+    const list=loadW().filter(x=>!(x.from===c.from&&x.to===c.to&&x.dep===c.dep&&x.cabin===c.cabin));
+    list.unshift(c); saveW(list); renderW();
+  }
+
+  $("#mkAlert").onclick=()=>{
+    if(!validate()){toast("أكمل الرحلة والدرجة أولاً");return;}
+    const c=current(); addWatch(c);
+    toast("انضافت للتنبيهات — "+CABINS[c.cabin]+" ✓");
+    if(bellOn) notify("تنبيه جديد", c.from+" ← "+c.to+" · "+CABINS[c.cabin]+" — راح نذكّرك تتحقق");
+    else toast("فعّل التذكير 🔔 عشان يوصلك تنبيه");
+  };
+
+  /* reminders (fire while the page is open) */
+  let bellOn=false;
+  function notify(title,body){
+    try{ if("Notification" in window && Notification.permission==="granted") new Notification(title,{body,icon:"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'/%3E"}); }catch{}
+  }
+  function setBell(on){
+    bellOn=on;
+    const b=$("#bell");
+    b.classList.toggle("on",on);
+    b.textContent = on? "🔔 التذكير مفعّل" : "🔔 فعّل التذكير";
+    try{localStorage.setItem("alfursan_bell",on?"1":"0")}catch{}
+  }
+  $("#bell").onclick=async()=>{
+    if(bellOn){setBell(false);toast("أُوقف التذكير");return;}
+    if(!("Notification" in window)){toast("جهازك ما يدعم تنبيهات المتصفح");return;}
+    let p=Notification.permission;
+    if(p!=="granted") p=await Notification.requestPermission();
+    if(p==="granted"){setBell(true);toast("تم — راح نذكّرك بالتحقق دوريًا");notify("تنبيهات الأميال مفعّلة","راح نذكّرك تتحقق من مقاعدك بالأميال");}
+    else toast("ما سمحت بالتنبيهات — فعّلها من إعدادات المتصفح");
+  };
+  // gentle reminder loop while open: every 3h, nudge for the oldest watch
+  setInterval(()=>{
+    if(!bellOn) return;
+    const list=loadW(); if(!list.length) return;
+    const c=list[0];
+    notify("تذكير: تحقق من مقاعدك", c.from+" ← "+c.to+" · "+CABINS[c.cabin]+" — افتح الصفحة واضغط «تحقق الآن»");
+  }, 3*60*60*1000);
+
+  // restore bell state
+  try{ if(localStorage.getItem("alfursan_bell")==="1" && Notification.permission==="granted") setBell(true); }catch{}
+
+  renderW();
+  render(); validate();
+})();
+</script>
