@@ -37,10 +37,24 @@ fs.mkdirSync(CFG.shotDir, { recursive: true });
 async function ctx() {
   if (_ctx) return _ctx;
   const { chromium } = await import('playwright');
-  _ctx = await chromium.launchPersistentContext(CFG.profileDir, {
+  // Anti-detection: drive the REAL Google Chrome (genuine fingerprint), hide the
+  // automation flags, and remove navigator.webdriver — so Saudia doesn't flag
+  // the session as a bot and log the user straight back out.
+  const opts = {
     headless: CFG.headless,
     viewport: { width: 1360, height: 900 },
-    args: ['--disable-blink-features=AutomationControlled'],
+    args: ['--disable-blink-features=AutomationControlled', '--no-default-browser-check'],
+    ignoreDefaultArgs: ['--enable-automation'],
+  };
+  try {
+    _ctx = await chromium.launchPersistentContext(CFG.profileDir, { ...opts, channel: 'chrome' });
+    console.log('  (using your installed Google Chrome)');
+  } catch {
+    _ctx = await chromium.launchPersistentContext(CFG.profileDir, opts);
+    console.log('  (Chrome not found — using bundled Chromium)');
+  }
+  await _ctx.addInitScript(() => {
+    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
   });
   _page = _ctx.pages()[0] || (await _ctx.newPage());
   _page.setDefaultTimeout(CFG.timeout);
