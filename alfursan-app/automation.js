@@ -30,6 +30,7 @@ const CFG = {
 let _ctx = null;      // persistent browser context
 let _page = null;
 let _busy = false;    // simple mutex
+let _loggedIn = false; // sticky: once logged in, stay logged in (no re-login loop)
 
 fs.mkdirSync(CFG.shotDir, { recursive: true });
 
@@ -69,19 +70,27 @@ async function shot(name) {
 
 export async function getStatus() {
   await ctx();
-  await _page.goto(CFG.siteUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
-  await _page.waitForTimeout(2000);
-  const loggedIn = await anyText(_page, CFG.loggedIn);
-  return { loggedIn, busy: _busy, headless: CFG.headless };
+  // Never reload while a search is running or once we already know we're in —
+  // reloading the window is what used to kick the user out.
+  if (_busy || _loggedIn) return { loggedIn: _loggedIn, busy: _busy, headless: CFG.headless };
+  // Only navigate if we're not already sitting on Saudia (first check).
+  if (!/saudia\.com/i.test(_page.url() || '')) {
+    await _page.goto(CFG.siteUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
+    await _page.waitForTimeout(1500);
+  }
+  if (await anyText(_page, CFG.loggedIn)) _loggedIn = true;
+  return { loggedIn: _loggedIn, busy: _busy, headless: CFG.headless };
 }
 
 // Open Saudia and (optionally) type credentials, then leave the window for the
 // user to finish (CAPTCHA / OTP). Requires HEADLESS=false the first time.
 export async function login() {
   await ctx();
-  await _page.goto(CFG.siteUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
-  await _page.waitForTimeout(2000);
-  if (await anyText(_page, CFG.loggedIn)) return { loggedIn: true };
+  if (!/saudia\.com/i.test(_page.url() || '')) {
+    await _page.goto(CFG.siteUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
+    await _page.waitForTimeout(1500);
+  }
+  if (await anyText(_page, CFG.loggedIn)) { _loggedIn = true; return { loggedIn: true }; }
 
   const user = process.env.ALFURSAN_USER, pass = process.env.ALFURSAN_PASS;
   const link = await firstVisible(_page, [
@@ -109,6 +118,7 @@ export async function login() {
     }
   }
   const loggedIn = await anyText(_page, CFG.loggedIn);
+  if (loggedIn) _loggedIn = true;
   await shot('login');
   return { loggedIn, note: loggedIn ? 'logged in' : 'finish login in the browser window on the computer running this server (CAPTCHA/OTP)' };
 }
@@ -212,7 +222,7 @@ export async function search(params) {
     await _page.goto(CFG.siteUrl, { waitUntil: 'domcontentloaded' }).catch(() => {});
     await _page.waitForTimeout(2000);
 
-    if (!(await anyText(_page, CFG.loggedIn))) {
+    if (!_loggedIn) {
       return { ok: false, needLogin: true, error: 'Not logged into Alfursan yet. Log in once on the computer, then retry.' };
     }
 
